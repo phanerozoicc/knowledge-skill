@@ -26,6 +26,27 @@ Use this skill when:
 
 ## Workflow
 
+### Step 0: Recall & Relate
+
+Before capturing anything, recall what the user already has. The source of truth is Notion — global "what do I already know" questions are answered by searching Notion, never by reading local copies. This step is what keeps沉淀 from becoming write-only: existing units are read back before new ones are written.
+
+1. **Recall from Notion.** Search the Knowledge Units database for anything related to this topic:
+
+   - Use `notion-search` with `data_source_url` = `collection://a0837cf8-c21b-4877-a713-63a8cb0d5dc5` (the Knowledge Units database). Search by the topic name, key terms from the input, and likely synonyms.
+   - Look for same-name units, same-domain units covering overlapping ground, and concepts that would be superseded or refined by the new learning.
+
+2. **Recall from teach's local workspace (if present).** If this capture is a hand-off from a `teach` session, there will be a topic folder in the current directory containing `MISSION.md` and `learning-records/`. Read them — they hold the compressed conclusions from the learning stage and should be treated as first-class input, not re-derived.
+
+3. **Decide how the new unit relates to existing knowledge.** Based on what was recalled, present the user with the relevant existing units and choose one of:
+
+   - **Update an existing unit** — the new learning corrects or deepens an old one. Use `Type = Update`, fill `Before` / `After`, and relate it to the old unit via `Related Units`. This is the supersession path: the old unit stays, the understanding evolves on record.
+   - **New unit, related** — the new unit is distinct but connected. Create it and link via `Related Units` (or `Backlinks`).
+   - **New unit, standalone** — no meaningful relation found.
+
+   Default toward Update or relate when any overlap exists. Suppress the urge to create a new island.
+
+Only after Step 0 is complete does the unit enter the normal capture flow below.
+
 ### Step 1: Receive Input
 
 Identify the source type:
@@ -42,12 +63,15 @@ Preserve only enough metadata for traceability: title, URL, author, date.
 
 Ask the user which mode they prefer:
 
-> "直接压缩还是先讨论？"
+> "这篇文章你想怎么处理——直接压缩、一起讨论，还是先带你读懂？"
 
-- **压缩模式**: Skip to Step 3a. Fast, produces draft Knowledge Units for review.
+- **压缩模式**: Skip to Step 3a. Fast, produces draft Knowledge Units for review. Best when the user already understands the material and just wants to settle it.
 - **讨论模式**: Go to Step 3b. Slower, but explores connections, challenges assumptions, and surfaces insights together.
+- **先读懂（转交 teach）**: The user wants to be taught the material first. Hand off to the `teach` skill: it treats this article as the primary source for a learning session, walks the user through it, and hands back to knowledge-modeling to settle once understanding stabilises. See the teach skill's SKILL.md.
 
 If the user has already specified the mode, proceed directly.
+
+**When to recommend "先读懂":** the article covers ground the user is not yet comfortable with (unfamiliar domain, dense prerequisites, a concept they've stumbled on before). The Step 0 recall often surfaces this — if the closest existing units are `Draft` or cover only prerequisites, the user likely needs teaching, not compression.
 
 ### Step 3a: Compression Mode
 
@@ -176,14 +200,31 @@ If fewer than two are yes → keep Memory = false.
 
 **Timing:** Create cards immediately after Step 5 (Write to Notion) completes successfully. This is a mandatory step, not optional — every Memory = true unit must get a card.
 
+### Step 7: Archive Local teach Records
+
+If this capture was a hand-off from a `teach` session, the source `learning-records/*.md` files in the teach topic folder now have a live Notion Knowledge Unit as their source of truth. Mark them archived rather than deleting — they remain as a local backup and a history of how the understanding evolved.
+
+For each teach learning-record consumed by this capture:
+
+- Add (or replace) the status line:
+  ```
+  Status: archived → https://www.notion.so/<new-or-updated-unit-page-id>
+  ```
+- Do **not** delete the file. The history of understanding trajectory (prior misconceptions, stated priors) is useful signal for future sessions.
+
+If the capture did not come from a teach hand-off (no topic folder / no `learning-records/` present), skip this step.
+
 ## Operating Rules
 
+- Always run Step 0 (Recall & Relate) before capturing. Notion is the source of truth for "what do I already know"; search it, never read local copies for that question.
+- When recall finds overlap, default to Update or relate — do not create a new island.
 - Prefer fewer, sharper units over complete coverage.
 - Do not summarize whole articles. Extract only what changes understanding.
 - Let a unit evolve by changing Type and Status; do not create separate databases.
 - Do not create a unit named only after a broad topic (e.g., "Java Memory Model").
 - Do not promote to Model unless multiple concrete cases share the pattern.
 - Use Notion only as persistence after thinking is coherent.
+- On a teach hand-off, treat the topic folder's `learning-records/` and `MISSION.md` as first-class input, and archive the records after writing (Step 7).
 - When unsure about the schema, consult `references/notion-schema.md`.
 - When unsure about review card decisions, consult `references/review-rules.md`.
 - When unsure about field format or anti-patterns, consult `references/unit-patterns.md`.

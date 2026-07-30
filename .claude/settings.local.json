@@ -1,4 +1,7 @@
 {
+  "enabledMcpjsonServers": [
+    "notion"
+  ],
   "permissions": {
     "allow": [
       "mcp__notion__notion-search",

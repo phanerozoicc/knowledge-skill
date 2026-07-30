@@ -36,13 +36,29 @@ If the user doesn't specify, default to **按到期时间**.
 
 ### Step 2: Fetch Cards from Notion
 
-Search the Ebbinghaus card database for cards matching the chosen scope.
-
 **Card database:**
 - Data source ID: `29ea2efb-b18d-8104-806b-000b8f294206`
-- Use `notion-search` with `data_source_url` = `collection://29ea2efb-b18d-8104-806b-000b8f294206`
+- Collection URL: `collection://29ea2efb-b18d-8104-806b-000b8f294206`
 
-**For due cards:** Search for cards where `下次复习时间` (formula field) indicates today or earlier. Since formula fields cannot be filtered via search, fetch recent cards and check their review status in the output.
+Formula fields (`下次复习时间`, `复习次数`, `复习状态`, …) are **not available in SQL**. Fetch in two stages:
+
+**Stage A — candidate set via `notion-query-data-sources` (SQL):**
+
+```sql
+SELECT url, "名称", "备注", "文件链接", "Knowledge Units", "批量复习", "归档",
+       "date:创建日期:start"
+FROM "collection://29ea2efb-b18d-8104-806b-000b8f294206"
+WHERE "批量复习" = '__YES__'
+  AND ("归档" IS NULL OR "归档" = '__NO__')
+ORDER BY "date:创建日期:start" DESC
+LIMIT 50
+```
+
+Narrow by scope when possible (e.g. `名称` / `备注` / `文件链接` LIKE for domain keywords). Cap the candidate set; do not dump the whole library into context.
+
+**Stage B — due filter via `notion-fetch`:** For each candidate URL (batch as needed), fetch the page and read formula values `下次复习时间` / `复习次数` / `复习状态`. Keep cards where `下次复习时间` is today or earlier. If none are due, say so and offer recent / random / domain review instead.
+
+Fallback if SQL is unavailable: `notion-search` with `data_source_url` = `collection://29ea2efb-b18d-8104-806b-000b8f294206`, then the same Stage B fetch+filter.
 
 **Card fields used during review:**
 - `名称` (title) -- the review question
@@ -124,10 +140,11 @@ Ask the user: "要记录这次复习结果到 Notion 吗？"
 ## Notion API Notes
 
 - **Checkbox fields**: Use `"__YES__"` or `"__NO__"` as string values.
-- **Formula fields** (`复习次数`, `下次复习时间`, `复习状态`, `默认复习间隔`, `复习提醒`): These are read-only. Do NOT try to write to them.
+- **Formula fields** (`复习次数`, `下次复习时间`, `复习状态`, `默认复习间隔`, `复习提醒`): Read-only and **not queryable via SQL**. Do NOT write them; read via `notion-fetch` after SQL candidate fetch.
 - **Relation fields**: Must be JSON array format `["https://www.notion.so/<page-id>"]` for multi-relation, or JSON string `"https://www.notion.so/<page-id>"` for single-relation.
 - **Button field** (`复习`): Cannot be triggered via API. Ignore it.
-- The Ebbinghaus system uses Notion formulas to calculate review intervals and next review dates. The review skill only needs to READ these values, not compute them.
+- Prefer `notion-query-data-sources` for candidate lists; prefer `notion-fetch` for formula values. Discover tool schemas before calling unfamiliar Notion tools.
+- The Ebbinghaus system uses Notion formulas to calculate review intervals and next review dates. This skill only READs those values.
 
 ## Operating Rules
 
@@ -142,5 +159,5 @@ Ask the user: "要记录这次复习结果到 Notion 吗？"
 
 ## References
 
-- `references/ebbinghaus-schema.md`: Detailed schema for all three Ebbinghaus databases and field definitions.
-- `references/review-feedback.md`: Feedback strategies for different recall quality levels.
+- [references/ebbinghaus-schema.md](references/ebbinghaus-schema.md): Detailed schema for all three Ebbinghaus databases and field definitions.
+- [references/review-feedback.md](references/review-feedback.md): Feedback strategies for different recall quality levels.

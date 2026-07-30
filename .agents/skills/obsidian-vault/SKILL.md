@@ -1,59 +1,59 @@
 ---
 name: obsidian-vault
-description: Search, create, and manage notes in the Obsidian vault with wikilinks and index notes. Use when user wants to find, create, or organize notes in Obsidian.
+description: >-
+  Search, create, and manage notes in the Obsidian vault with wikilinks.
+  Use when the user wants to find, create, or organize notes in Obsidian,
+  or says "Obsidian", "笔记库", "找一下笔记", "创建新笔记", "整理索引".
 ---
 
 # Obsidian Vault
 
 ## Vault location
 
-`/mnt/d/Obsidian Vault/AI Research/`
+`/home/unt/knowledge/`
 
-Mostly flat at root level.
+Organized by **topic folders** (e.g. `AI/`, `Kubernetes/`, `分布式/`, `java知识体系/`), not a flat root. Prefer placing new notes inside the matching folder.
 
 ## Naming conventions
 
-- **Index notes**: aggregate related topics (e.g., `Ralph Wiggum Index.md`, `Skills Index.md`, `RAG Index.md`)
-- **Title case** for all note names
-- No folders for organization - use links and index notes instead
+- Prefer the existing folder's naming style (often Chinese topic titles; numbered sequences like `01. 容器基础.md` where already used)
+- **Title Case** for English-only note names
+- Use folders for domain grouping; use `[[wikilinks]]` for cross-links within and across folders
 
 ## Linking
 
-- Use Obsidian `[[wikilinks]]` syntax: `[[Note Title]]`
-- Notes link to dependencies/related notes at the bottom
-- Index notes are just lists of `[[wikilinks]]`
+- Use Obsidian `[[wikilinks]]` syntax: `[[Note Title]]` or `[[path/Note Title]]`
+- Related notes: list `[[wikilinks]]` at the bottom of the note
 
 ## Workflows
 
 ### Search for notes
 
+Use Grep/Glob on the vault path (preferred), or:
+
 ```bash
 # Search by filename
-find "/mnt/d/Obsidian Vault/AI Research/" -name "*.md" | grep -i "keyword"
+find "/home/unt/knowledge/" -name "*.md" | grep -i "keyword"
 
 # Search by content
-grep -rl "keyword" "/mnt/d/Obsidian Vault/AI Research/" --include="*.md"
+grep -rl "keyword" "/home/unt/knowledge/" --include="*.md"
 ```
-
-Or use Grep/Glob tools directly on the vault path.
 
 ### Create a new note
 
-1. Use **Title Case** for filename
-2. Write content as a unit of learning (per vault rules)
-3. Add `[[wikilinks]]` to related notes at the bottom
-4. If part of a numbered sequence, use the hierarchical numbering scheme
+1. Pick the topic folder that matches the domain; create the folder only if none fits
+2. Match that folder's filename style
+3. Write the note; add `[[wikilinks]]` to related notes at the bottom
+4. If part of a numbered sequence in that folder, continue the numbering
 
-### Find related notes
-
-Search for `[[Note Title]]` across the vault to find backlinks:
+### Find related notes / backlinks
 
 ```bash
-grep -rl "\\[\\[Note Title\\]\\]" "/mnt/d/Obsidian Vault/AI Research/"
+grep -rl "\[\[Note Title\]\]" "/home/unt/knowledge/"
 ```
 
-### Find index notes
+### Find index-style notes
 
 ```bash
-find "/mnt/d/Obsidian Vault/AI Research/" -name "*Index*"
+find "/home/unt/knowledge/" -iname "*index*" -o -iname "*索引*"
 ```

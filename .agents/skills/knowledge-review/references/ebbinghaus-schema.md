@@ -28,13 +28,17 @@ knowledge (page)
 | `批量复习` | checkbox | RW | Whether card is active in review system |
 | `归档` | checkbox | RW | Whether card is archived (skip if true) |
 | `自定义复习间隔` | text | RW | Custom interval override, comma-separated days |
-| `下次复习时间` | formula | RO | Calculated next review date |
-| `复习次数` | formula | RO | Count of completed reviews |
-| `复习状态` | formula | RO | Status label for grouping |
-| `复习提醒` | formula | RO | Reminder text |
-| `默认复习间隔` | formula | RO | Default interval string |
-| `复习` | button | N/A | Triggers review in Notion UI |
+| `下次复习时间` | formula | RO | Calculated next review date (**not in SQL**) |
+| `复习次数` | formula | RO | Count of completed reviews (**not in SQL**) |
+| `复习状态` | formula | RO | Status label for grouping (**not in SQL**) |
+| `复习提醒` | formula | RO | Reminder text (**not in SQL**) |
+| `默认复习间隔` | formula | RO | Default interval string (**not in SQL**) |
+| `复习` | button | N/A | Triggers review in Notion UI (**not in SQL**) |
 | `艾宾浩斯复习记录` | relation | RO | Linked review records |
+
+### SQL availability
+
+`notion-query-data-sources` exposes writable/simple columns only. Formulas and the button above are listed in Notion as `notAvailableInQuerySql` — filter candidates in SQL (`批量复习`, `归档`, text fields), then `notion-fetch` pages to read due dates.
 
 ## Database 2: 艾宾浩斯复习记录
 

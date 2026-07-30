@@ -1,6 +1,10 @@
 ---
 name: batch-grill-me
-description: A relentless interview that asks every frontier question at once, round by round.
+description: >-
+  Relentless design-tree interview that asks every frontier question in one
+  round, then waits. Use when explicitly invoked (/batch-grill-me) or when the
+  user says "batch grill me", "批量拷问", "一轮问完 frontier". Prefer `grilling`
+  for one-question-at-a-time.
 disable-model-invocation: true
 ---
 

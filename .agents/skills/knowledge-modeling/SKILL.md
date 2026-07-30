@@ -35,7 +35,7 @@ Before capturing anything, recall what the user already has. The source of truth
    - Use `notion-search` with `data_source_url` = `collection://a0837cf8-c21b-4877-a713-63a8cb0d5dc5` (the Knowledge Units database). Search by the topic name, key terms from the input, and likely synonyms.
    - Look for same-name units, same-domain units covering overlapping ground, and concepts that would be superseded or refined by the new learning.
 
-2. **Recall from teach's local workspace (if present).** If this capture is a hand-off from a `teach` session, there will be a topic folder in the current directory containing `MISSION.md` and `learning-records/`. Read them — they hold the compressed conclusions from the learning stage and should be treated as first-class input, not re-derived.
+2. **Recall from a local learning hand-off (if present).** If the current directory (or a topic subfolder) contains `MISSION.md` and/or `learning-records/`, read them — they hold compressed conclusions from a prior learning stage and should be treated as first-class input, not re-derived.
 
 3. **Decide how the new unit relates to existing knowledge.** Based on what was recalled, present the user with the relevant existing units and choose one of:
 
@@ -67,12 +67,22 @@ Ask the user which mode they prefer:
 
 - **压缩模式**: Skip to Step 3a. Fast, produces draft Knowledge Units for review. Best when the user already understands the material and just wants to settle it.
 - **讨论模式**: Go to Step 3b. Slower, but explores connections, challenges assumptions, and surfaces insights together.
-- **先读懂（转交 teach）**: The user wants to be taught the material first. Hand off to the `teach` skill: it treats this article as the primary source for a learning session, walks the user through it, and hands back to knowledge-modeling to settle once understanding stabilises. See the teach skill's SKILL.md.
+- **先读懂**: Teach the material *in this session* before compressing — walk the source section by section, check understanding, then return to Step 3a/3b once the user is ready to settle units. (There is no separate `teach` skill in this repo; do the teaching inline.)
 
 If the user has already specified the mode, proceed directly.
 
 **When to recommend "先读懂":** the article covers ground the user is not yet comfortable with (unfamiliar domain, dense prerequisites, a concept they've stumbled on before). The Step 0 recall often surfaces this — if the closest existing units are `Draft` or cover only prerequisites, the user likely needs teaching, not compression.
 
+### Routing (avoid skill collisions)
+
+| User intent | Use |
+|-------------|-----|
+| Capture / compress / study together / settle understanding into Notion | **this skill** |
+| Spaced-repetition quiz on existing cards | `knowledge-review` |
+| Internet / platform lookup (小红书、推特、B站、网页等) | `agent-reach` (personal skill), then optionally return here to compress |
+| Primary-source docs/API investigation → Markdown report in repo | `research` |
+
+"研究一下" alone is ambiguous: prefer this skill when the goal is *learning + Notion capture*; prefer `research` / `agent-reach` when the goal is *fetch facts first*.
 ### Step 3a: Compression Mode
 
 Run the four-question pipeline on each candidate unit:
@@ -200,19 +210,19 @@ If fewer than two are yes → keep Memory = false.
 
 **Timing:** Create cards immediately after Step 5 (Write to Notion) completes successfully. This is a mandatory step, not optional — every Memory = true unit must get a card.
 
-### Step 7: Archive Local teach Records
+### Step 7: Archive Local Learning Records
 
-If this capture was a hand-off from a `teach` session, the source `learning-records/*.md` files in the teach topic folder now have a live Notion Knowledge Unit as their source of truth. Mark them archived rather than deleting — they remain as a local backup and a history of how the understanding evolved.
+If this capture consumed a local hand-off (`MISSION.md` / `learning-records/*.md`), those files now have a live Notion Knowledge Unit as their source of truth. Mark them archived rather than deleting.
 
-For each teach learning-record consumed by this capture:
+For each `learning-records/*.md` file consumed:
 
 - Add (or replace) the status line:
   ```
   Status: archived → https://www.notion.so/<new-or-updated-unit-page-id>
   ```
-- Do **not** delete the file. The history of understanding trajectory (prior misconceptions, stated priors) is useful signal for future sessions.
+- Do **not** delete the file.
 
-If the capture did not come from a teach hand-off (no topic folder / no `learning-records/` present), skip this step.
+If there is no such hand-off, skip this step.
 
 ## Operating Rules
 
@@ -224,13 +234,14 @@ If the capture did not come from a teach hand-off (no topic folder / no `learnin
 - Do not create a unit named only after a broad topic (e.g., "Java Memory Model").
 - Do not promote to Model unless multiple concrete cases share the pattern.
 - Use Notion only as persistence after thinking is coherent.
-- On a teach hand-off, treat the topic folder's `learning-records/` and `MISSION.md` as first-class input, and archive the records after writing (Step 7).
-- When unsure about the schema, consult `references/notion-schema.md`.
-- When unsure about review card decisions, consult `references/review-rules.md`.
-- When unsure about field format or anti-patterns, consult `references/unit-patterns.md`.
+- On a local hand-off, treat `learning-records/` and `MISSION.md` as first-class input, and archive the records after writing (Step 7).
+- Prefer Notion MCP tools already configured in this project (`notion-search`, `notion-fetch`, `notion-create-pages`, `notion-query-data-sources`). Discover schemas with `GetMcpTools` before calling unfamiliar tools.
+- When unsure about the schema, consult [references/notion-schema.md](references/notion-schema.md).
+- When unsure about review card decisions, consult [references/review-rules.md](references/review-rules.md).
+- When unsure about field format or anti-patterns, consult [references/unit-patterns.md](references/unit-patterns.md).
 
 ## References
 
-- `references/notion-schema.md`: Notion database fields, views, and implementation rules.
-- `references/review-rules.md`: How to decide whether a unit should become an Ebbinghaus review card.
-- `references/unit-patterns.md`: Field definitions, examples by type, and anti-patterns.
+- [references/notion-schema.md](references/notion-schema.md): Notion database fields, views, and implementation rules.
+- [references/review-rules.md](references/review-rules.md): How to decide whether a unit should become an Ebbinghaus review card.
+- [references/unit-patterns.md](references/unit-patterns.md): Field definitions, examples by type, and anti-patterns.

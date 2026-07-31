@@ -13,7 +13,7 @@
 ├── SKILL.md                             # DeepTutor CLI 使用指南
 ├── data/                                # DeepTutor 运行时数据（workspace, chat history, settings）
 ├── .agents/skills/                      # Skill 定义（唯一源；.claude/.cursor/skills 为软链镜像）
-│   ├── knowledge-modeling/              # 知识沉淀 Skill
+│   ├── knowledge-modeling/              # 理解、讨论与沉淀 Skill
 │   │   ├── SKILL.md
 │   │   └── references/
 │   │       ├── notion-schema.md         # Notion 数据库结构与字段
@@ -41,13 +41,14 @@
 
 ## 核心工作流
 
+两个核心 Skill：**knowledge-modeling** 负责读懂、讨论与沉淀，**knowledge-review** 负责长期复习。
+
 ```
-学习 / 阅读 / 思考
-        │
-        ▼
-knowledge-modeling（沉淀）
-        ├── 回读 Notion + 本地记录 → 去重/关联
-        ├── 四问思考管线（Problem → Essence → Tradeoff → Transfer）
+knowledge-modeling（理解与沉淀）
+        ├── 读懂 / 讨论 / 直接压缩
+        ├── 读懂模式：诊断 → 最小讲解 → 闭卷检索 → 迁移
+        ├── 回读 Notion + 可选本地记录 → 去重/关联
+        ├── 四问压缩 → 审阅确认
         ├── 写入 Notion Knowledge Units
         └── 生成艾宾浩斯卡片
         │
@@ -55,21 +56,49 @@ knowledge-modeling（沉淀）
 knowledge-review（间隔复习，主动回忆）
 ```
 
+## 核心学习 Skill
+
+```
+.agents/  （.claude/skills 通过符号链接复用）
+└── skills/
+    ├── knowledge-modeling/             # 理解、讨论与沉淀 Skill
+    │   ├── SKILL.md
+    │   └── references/
+    │       ├── notion-schema.md        # Notion 数据库结构与字段定义
+    │       ├── review-rules.md         # 艾宾浩斯复习卡片生成规则
+    │       └── unit-patterns.md        # 知识单元类型指南与反模式
+    └── knowledge-review/              # 间隔复习 Skill
+        ├── SKILL.md
+        └── references/
+            ├── ebbinghaus-schema.md    # 艾宾浩斯三库 Schema 定义
+            └── review-feedback.md      # 复习反馈策略与教学技巧
+```
+
 ## Skills
 
 ### knowledge-modeling
 
-交互式认知压缩 Skill。接收输入后**先回读 Notion 已有知识**做去重/关联（避免重复建孤岛），再通过四问思考管线压缩，写入 Notion Knowledge Units 并生成艾宾浩斯卡片。
+理解与沉淀 Skill。根据用户意图选择模式，在理解稳定后回读 Notion 做去重/关联，再引导认知压缩并写入 Knowledge Units。
+
+**三种模式：**
+- **读懂模式**：快速诊断 -> 最小讲解 -> 闭卷检索 -> 新情境迁移；适合陌生概念。
+- **讨论模式**：发散、质疑、连接、压缩；适合共同探索。
+- **压缩模式**：直接生成 Knowledge Unit 草稿；适合用户已经理解、只需沉淀。
 
 **触发方式：**
-- "一起学习", "帮我学习", "学习一下"
+- "一起学习", "帮我学习", "学习一下", "我来学"
+- "教我 XXX", "我想学 XXX", "带我学 XXX", "给我讲讲 XXX"
 - "整理这个知识", "帮我压缩", "压缩一下"
-- "讨论一下 XXX", "研究一下 XXX"
+- "讨论一下 XXX", "聊聊 XXX"
 - "看看这篇文章", "读一下这个"
 
-**支持输入：** 文章、技术文档、代码、读书笔记、个人思考或调试过程。
+**回读桥（Step 0）：** 写入前用 `notion-search` 搜 Knowledge Units，发现重叠时默认走向 Update（填 Before/After）或 Related Units 关联，而非新建。
 
-**知识单元类型：** Raw → Insight → Model → Principle → Update → Reference，渐进式提炼。
+**掌握标准：** 读懂模式下，用户需要先用自己的话闭卷复述，并在新场景中应用；未通过时保持 `Raw` / `Draft` 并记录 `Open Questions`，不把熟悉感当作掌握。
+
+**支持的输入类型：** 文章、技术文档、代码、读书笔记、用户自己的思考或调试过程。
+
+**知识单元类型：** `Raw`、`Insight`、`Model`、`Principle`、`Update`、`Reference`。其中 `Raw` 可随理解成熟为 `Insight`；其他类型表达知识的角色，并非固定升级顺序。
 
 ### knowledge-review
 
@@ -183,7 +212,11 @@ Obsidian 笔记管理 Skill。在 Obsidian Vault 中搜索、创建和组织笔�
 在 Cursor 或 Claude Code 中打开此项目目录。自动触发类 Skill（如 knowledge-modeling / knowledge-review / grilling）可直接说触发短语；写作与 handoff 等带 `disable-model-invocation` 的 Skill 需显式调用（`/skill-name`）。
 
 ```bash
-# 沉淀知识
+# 读懂一个陌生主题（触发 knowledge-modeling 的读懂模式）
+我想搞懂 TCP 拥塞控制
+教我 JVM 的 happens-before
+
+# 讨论或沉淀知识（触发 knowledge-modeling）
 帮我学习一下 Java 虚拟线程
 讨论一下 volatile 关键字
 帮我压缩这篇文章：https://example.com/article

@@ -1,15 +1,15 @@
 ---
 name: knowledge-modeling
-description: Interactive learning companion and knowledge capture skill. Use when the user wants to learn, study together, discuss a topic, capture knowledge from articles or code, or do cognitive compression. Covers phrases like "一起学习", "帮我学习", "学习一下", "研究一下", "整理知识", "讨论一下", "压缩一下", "看看这篇文章", and any shared learning material. Walks through the four-question thinking pipeline (Problem, Essence, Tradeoff, Transfer), supports both direct compression and discussion modes, and writes finalized knowledge to Notion Knowledge Units.
+description: Interactive learning and knowledge capture skill. Use when the user wants to understand, discuss, compress, or preserve knowledge from articles, code, documentation, or their own thinking. Supports a lightweight learn mode with diagnostic questions and retrieval practice, a discussion mode, and a direct compression mode. Writes finalized knowledge to Notion Knowledge Units.
 ---
 
 # Knowledge Modeling
 
 ## Purpose
 
-This skill is an interactive learning companion. It helps the user capture, compress, and store knowledge into their Notion Knowledge Units system.
+This skill helps the user understand, compress, and store knowledge in their Notion Knowledge Units system.
 
-The user will provide learning material (articles, links, code, screenshots, thoughts). Your job is to guide them through cognitive compression, then write the results to Notion.
+The user may provide learning material (articles, links, code, screenshots, thoughts) or a topic. Help them reach demonstrable understanding when needed, then guide cognitive compression and write the result to Notion.
 
 ## Trigger
 
@@ -18,9 +18,10 @@ Use this skill when:
 - User says any of the following (or variations):
   - "一起学习", "帮我学习", "学习一下", "我来学"
   - "整理这个知识", "帮我压缩", "压缩一下"
-  - "讨论一下 XXX", "聊聊 XXX", "研究一下 XXX"
+  - "讨论一下 XXX", "聊聊 XXX"
   - "看看这篇文章", "读一下这个"
   - "和我一起看", "一起研究"
+  - "教我 XXX", "我想学 XXX", "带我学 XXX", "给我讲讲 XXX"
 - User asks about a technical concept and wants to preserve the understanding
 - User shares a learning goal or wants to study a topic together
 
@@ -63,15 +64,20 @@ Preserve only enough metadata for traceability: title, URL, author, date.
 
 Ask the user which mode they prefer:
 
-> "这篇文章你想怎么处理——直接压缩、一起讨论，还是先带你读懂？"
+> "这份材料你想怎么处理——先读懂、一起讨论，还是直接压缩？"
 
 - **压缩模式**: Skip to Step 3a. Fast, produces draft Knowledge Units for review. Best when the user already understands the material and just wants to settle it.
 - **讨论模式**: Go to Step 3b. Slower, but explores connections, challenges assumptions, and surfaces insights together.
-- **先读懂**: Teach the material *in this session* before compressing — walk the source section by section, check understanding, then return to Step 3a/3b once the user is ready to settle units. (There is no separate `teach` skill in this repo; do the teaching inline.)
+- **读懂模式**: Go to Step 3c. Use a short diagnostic, minimal explanation, closed-book retrieval, and a transfer question before compression. Best for unfamiliar material.
 
 If the user has already specified the mode, proceed directly.
 
-**When to recommend "先读懂":** the article covers ground the user is not yet comfortable with (unfamiliar domain, dense prerequisites, a concept they've stumbled on before). The Step 0 recall often surfaces this — if the closest existing units are `Draft` or cover only prerequisites, the user likely needs teaching, not compression.
+Infer the mode when intent is clear instead of asking unnecessarily:
+- "压缩/整理/沉淀" → compression mode
+- "讨论/聊聊" → discussion mode
+- "教我/我想学/带我读懂" → learn mode
+
+Recommend learn mode when the material relies on unfamiliar prerequisites, the closest existing units are only `Draft`, or the user cannot explain the core idea in their own words.
 
 ### Routing (avoid skill collisions)
 
@@ -113,6 +119,19 @@ Key principles for discussion:
 - Preserve ambiguity when understanding is incomplete — mark as `Raw` or `Draft`.
 - Do not force every idea into a model. Models emerge from multiple shared insights.
 
+### Step 3c: Learn Mode
+
+Keep this mode lightweight. Do not create a separate course workspace or long lesson artifact.
+
+1. **Set the target.** Ask what the user needs to be able to explain, decide, debug, or build. If the goal is already clear, do not ask again.
+2. **Run one diagnostic.** Ask a single question that exposes the user's current model or prerequisite gap. Wait for the answer.
+3. **Teach the smallest missing piece.** Explain only what closes the observed gap. Ground factual claims in the provided source or a high-trust primary source.
+4. **Retrieve closed-book.** Ask the user to restate the idea, key distinction, or mechanism without looking at the explanation. Wait for the answer before giving feedback.
+5. **Test transfer.** Give one new scenario, counterexample, or boundary case and ask the user to apply the idea.
+6. **Compress only after evidence.** If retrieval and transfer are adequate, continue to the four-question pipeline. Otherwise, correct the specific gap and retry once. Keep unresolved understanding as `Raw` / `Draft` with `Open Questions`; do not present fluency as mastery.
+
+Do not generate both the user's retrieval answer and its evaluation in the same turn.
+
 ### Step 4: Review and Confirm
 
 Present the final Knowledge Units to the user in this format:
@@ -126,6 +145,9 @@ Unit N: [Name]
   Essence: ...
   Tradeoff: ...
   Transfer: ...
+  Boundary: ...
+  Evidence: ...
+  Open Questions: ... (if unresolved)
   Memory: [yes/no]
   Review Question: ... (if Memory = yes)
   Review Answer: ... (if Memory = yes)
@@ -176,6 +198,8 @@ After user confirmation, create pages in Knowledge Units database.
 - `Transfer` ← where else this applies
 - `Before` / `After` ← only for Type=Update
 - `Boundary` ← when it stops applying (if known)
+- `Evidence` ← source facts, examples, or observations supporting the unit
+- `Open Questions` ← unresolved gaps, especially from learn mode
 - `Source URL` ← original source link (must go in `properties`, NOT as a top-level page field)
 - `Memory` ← checkbox: use `__YES__` / `__NO__` (not boolean, not 1/0)
 - `Review Question` / `Review Answer` ← only if Memory = `__YES__`
@@ -236,6 +260,8 @@ If there is no such hand-off, skip this step.
 - Use Notion only as persistence after thinking is coherent.
 - On a local hand-off, treat `learning-records/` and `MISSION.md` as first-class input, and archive the records after writing (Step 7).
 - Prefer Notion MCP tools already configured in this project (`notion-search`, `notion-fetch`, `notion-create-pages`, `notion-query-data-sources`). Discover schemas with `GetMcpTools` before calling unfamiliar tools.
+- In learn mode, require the user to retrieve and apply the idea before treating it as understood.
+- Prefer the smallest useful teaching loop; do not create course artifacts unless explicitly requested.
 - When unsure about the schema, consult [references/notion-schema.md](references/notion-schema.md).
 - When unsure about review card decisions, consult [references/review-rules.md](references/review-rules.md).
 - When unsure about field format or anti-patterns, consult [references/unit-patterns.md](references/unit-patterns.md).

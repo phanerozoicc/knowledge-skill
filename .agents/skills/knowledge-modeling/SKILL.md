@@ -155,9 +155,16 @@ Unit N: [Name]
 
 Ask: "确认写入 Notion？需要调整吗？"
 
-### Step 5: Write to Notion
+### Step 5: Write Local-first, then Push to Notion
 
-After user confirmation, create pages in Knowledge Units database.
+After user confirmation, write **local first**, let the user review the file in Obsidian, then **push to Notion**. The local file is the review surface; Notion remains the final source of truth. Format details and the full field mapping live in the `notion-sync` skill's [references/local-format.md](../notion-sync/references/local-format.md).
+
+**Step 5a — Write the local file.** Create `knowledge-unit/<Domain>/<Name>.md` with:
+
+- Frontmatter carrying the Notion properties (`type`, `status`, `domain`, `source_url`, `memory`, `review_question`, `review_answer`) plus sync metadata slots. At this point `notion_id` / `notion_url` / `last_edited_time` / `synced_at` are **empty** — they are filled back after the push in 5b.
+- Body following the Thinking Pipeline structure (below).
+
+**Step 5b — Push to Notion (after the user reviews and confirms).** Follow the `notion-sync` skill's Step 2 (Push): `notion-search` to deduplicate first, then `notion-create-pages` (parent type `data_source_id`) for a new unit or `notion-update-page` for an existing one. After a successful push, write `notion_id` / `notion_url` / `last_edited_time` / `synced_at` back into the local file's frontmatter and update `.notion-sync-index.json`.
 
 **Notion target:**
 - Database: `Knowledge Units`
@@ -258,6 +265,7 @@ If there is no such hand-off, skip this step.
 - Do not create a unit named only after a broad topic (e.g., "Java Memory Model").
 - Do not promote to Model unless multiple concrete cases share the pattern.
 - Use Notion only as persistence after thinking is coherent.
+- **Write local-first (Step 5a → 5b)**: produce a local Markdown file under `knowledge-unit/` for the user to review before pushing to Notion. The local file is the review surface; Notion is the final source of truth. See the `notion-sync` skill for the local format and push workflow.
 - On a local hand-off, treat `learning-records/` and `MISSION.md` as first-class input, and archive the records after writing (Step 7).
 - Prefer Notion MCP tools already configured in this project (`notion-search`, `notion-fetch`, `notion-create-pages`, `notion-query-data-sources`). Discover schemas with `GetMcpTools` before calling unfamiliar tools.
 - In learn mode, require the user to retrieve and apply the idea before treating it as understood.
@@ -268,6 +276,7 @@ If there is no such hand-off, skip this step.
 
 ## References
 
+- [../notion-sync/references/local-format.md](../notion-sync/references/local-format.md): Local Markdown file format, frontmatter field mapping, and the `.notion-sync-index.json` schema used by Step 5a (write local) and 5b (push to Notion).
 - [references/notion-schema.md](references/notion-schema.md): Notion database fields, views, and implementation rules.
 - [references/review-rules.md](references/review-rules.md): How to decide whether a unit should become an Ebbinghaus review card.
 - [references/unit-patterns.md](references/unit-patterns.md): Field definitions, examples by type, and anti-patterns.

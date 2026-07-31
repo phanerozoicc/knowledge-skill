@@ -1,2 +1,4 @@
 .DS_Store
 data/
+# session-local planning artifacts; keep .zcode/config.json (MCP config) tracked
+.zcode/plans/

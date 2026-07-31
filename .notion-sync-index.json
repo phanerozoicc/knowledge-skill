@@ -1,0 +1,199 @@
+{
+  "a0837cf8-c21b-4877-a713-63a8cb0d5dc5": {
+    "37fa2efbb18d815cb019fd1902de17b7": {
+      "filename": "knowledge-unit/Java/ArrayList 打包了三样东西 数组实现 + 自动扩容 + List 接口契约.md",
+      "last_edited_time": "2026-06-14T09:12:46.128Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "37fa2efbb18d816fa58edec42a47afff": {
+      "filename": "knowledge-unit/Java/Set 唯一性不变量的脆弱性——可变值对象放进去会悄悄违约.md",
+      "last_edited_time": "2026-06-14T13:22:36.431Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "37fa2efbb18d817f9c16e0387c304214": {
+      "filename": "knowledge-unit/Java/Set 的真正价值不是 会去重 ,是把 不重复 变成容器维护的不变量.md",
+      "last_edited_time": "2026-06-14T13:22:50.216Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "37fa2efbb18d81e596f9eebb5b8eee09": {
+      "filename": "knowledge-unit/Java/固定形状的数据,数组的定长是保证;List 的灵活性接口反而是负担.md",
+      "last_edited_time": "2026-06-14T09:12:46.151Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "36ba2efbb18d81b0a48af04376917f52": {
+      "filename": "knowledge-unit/JVM/happens-before 是 JMM 唯一的核心抽象.md",
+      "last_edited_time": "2026-05-25T15:56:14.979Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "36ba2efbb18d810bb349dae5639bf7ce": {
+      "filename": "knowledge-unit/Java/Jenkov - Java volatile 关键字.md",
+      "last_edited_time": "2026-05-25T15:56:15.072Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "36ba2efbb18d8111a81eeaf423a69b8d": {
+      "filename": "knowledge-unit/JVM/JMM 的「主内存」是抽象概念，数据物理上始终在 cache 层次流转.md",
+      "last_edited_time": "2026-05-25T15:56:15.068Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "36ba2efbb18d814194eff57aadb2b663": {
+      "filename": "knowledge-unit/JVM/Store buffer 和 invalid queue 是 MESI 的性能优化，代价是延迟可见.md",
+      "last_edited_time": "2026-05-25T15:56:15.027Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "36ba2efbb18d81d2b565cd743681393f": {
+      "filename": "knowledge-unit/Java/DCL 不加 volatile 可能返回半构造对象.md",
+      "last_edited_time": "2026-05-25T15:56:15.056Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "36ba2efbb18d81eca8a1fa0abfadf008": {
+      "filename": "knowledge-unit/JVM/伪共享：无关变量因 cache line 粒度互相踢失效.md",
+      "last_edited_time": "2026-05-25T15:56:15.042Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "36ba2efbb18d81f38e85df919279e429": {
+      "filename": "knowledge-unit/JVM/内存屏障控制同步时机，MESI 提供同步能力，缺一不可.md",
+      "last_edited_time": "2026-05-25T15:56:14.996Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "36ba2efbb18d81f4a48aff1deb6e9bc9": {
+      "filename": "knowledge-unit/Java/volatile 保证可见性但不保证原子性.md",
+      "last_edited_time": "2026-05-25T15:56:15.013Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "36ca2efbb18d814c8036c4f37d82ca94": {
+      "filename": "knowledge-unit/Java/可见性根因是缓存，竞态根因是非原子——两个独立问题.md",
+      "last_edited_time": "2026-05-26T00:00:57.314Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "36ca2efbb18d81ce8e4fc294d856c41e": {
+      "filename": "knowledge-unit/JVM/JMM 是 JVM 逻辑模型与硬件物理模型之间的规则层.md",
+      "last_edited_time": "2026-05-26T00:00:57.297Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "372a2efbb18d81218c33c4a3f58d2448": {
+      "filename": "knowledge-unit/JVM/synchronized + ReentrantLock 可导致单锁死锁耗尽整个服务.md",
+      "last_edited_time": "2026-06-01T10:57:29.245Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "372a2efbb18d813fba82efd1ff8d3029": {
+      "filename": "knowledge-unit/Backend/响应式编程通过拉取模型实现背压控制.md",
+      "last_edited_time": "2026-06-01T10:37:48.135Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "372a2efbb18d8174a342e7c995ced878": {
+      "filename": "knowledge-unit/Java/虚拟线程是协作式调度，非抢占式.md",
+      "last_edited_time": "2026-06-01T10:37:47.985Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "372a2efbb18d817c9e77c921f994b550": {
+      "filename": "knowledge-unit/Java/虚拟线程时代，限流从 限线程 变成 限资源.md",
+      "last_edited_time": "2026-06-01T10:37:48.048Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "372a2efbb18d8180b465c602dc801d23": {
+      "filename": "knowledge-unit/Java/结构化并发将并发任务生命周期绑定在代码块上.md",
+      "last_edited_time": "2026-06-01T10:37:48.112Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "372a2efbb18d8199af51d9ca7e7251eb": {
+      "filename": "knowledge-unit/JVM/synchronized 会钉住虚拟线程，ReentrantLock 不会.md",
+      "last_edited_time": "2026-06-01T10:37:48.020Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "372a2efbb18d81d4acf1d9f5e949eba9": {
+      "filename": "knowledge-unit/JVM/ThreadLocal 绑定在 Thread 对象上，不绑定在 OS 线程上.md",
+      "last_edited_time": "2026-06-01T10:37:48.089Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "374a2efbb18d819fbf72fca33401180f": {
+      "filename": "knowledge-unit/Java/多线程的双价值模型——并发解耦等待，并行利用多核.md",
+      "last_edited_time": "2026-06-03T00:46:54.724Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "375a2efbb18d816dab9dcd403e9dc3ec": {
+      "filename": "knowledge-unit/Java/多线程收益的本质是填满CPU空闲，而非并行本身.md",
+      "last_edited_time": "2026-06-04T12:28:04.756Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "375a2efbb18d818faaedd1ac8134dcfa": {
+      "filename": "knowledge-unit/Java/多线程三重代价随线程数非线性增长，超过临界点收益递减.md",
+      "last_edited_time": "2026-06-04T15:03:14.599Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "375a2efbb18d81beac9bdacd8dbe569c": {
+      "filename": "knowledge-unit/Java/并发风险的不对称性——收益可预期，代价不可预期.md",
+      "last_edited_time": "2026-06-04T00:50:23.826Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "376a2efbb18d81e3ba0ff48ccf7cd26b": {
+      "filename": "knowledge-unit/Java/并发模型的核心分歧是共享状态vs分离状态，五种模型各有适用场景.md",
+      "last_edited_time": "2026-06-05T23:53:05.750Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "377a2efbb18d81df8fa3d3bfdbb89536": {
+      "filename": "knowledge-unit/Java/Same-threading：线程隔离即无锁，轮询分配长连接是最简实践.md",
+      "last_edited_time": "2026-06-06T00:20:11.279Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "379a2efbb18d815494cfc64ad667c578": {
+      "filename": "knowledge-unit/Java/线程安全的本质是控制对象逃逸，JVM逃逸分析是不逃逸的编译奖励.md",
+      "last_edited_time": "2026-06-08T16:26:19.195Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "379a2efbb18d81ddbeb8d2c4ca770d86": {
+      "filename": "knowledge-unit/Java/竞态条件的两种模式：read-modify-write和check-then-act.md",
+      "last_edited_time": "2026-06-08T00:15:09.457Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "379a2efbb18d81ffab49f322adef5f35": {
+      "filename": "knowledge-unit/Java/锁粒度是安全性和吞吐量的动态平衡，ConcurrentHashMap的演进是最佳例证.md",
+      "last_edited_time": "2026-06-08T00:15:09.485Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "3aca2efbb18d8115909ac6aaee451768": {
+      "filename": "knowledge-unit/Java/公平锁的实现核心：每个线程等待在独立的监视器对象上.md",
+      "last_edited_time": "2026-07-29T09:27:31.512Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "3aca2efbb18d8133a16ffd7a44bf14f1": {
+      "filename": "knowledge-unit/Java/死锁预防的三种策略及其适用边界.md",
+      "last_edited_time": "2026-07-29T09:27:31.512Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "3aca2efbb18d8156b65ed9bcd670fa03": {
+      "filename": "knowledge-unit/Java/Amdahl 定律：不可并行部分是加速比的天花板.md",
+      "last_edited_time": "2026-07-29T09:29:35.755Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "3aca2efbb18d815f8284f427ee901f4a": {
+      "filename": "knowledge-unit/Java/非阻塞算法的核心是「不阻塞，只尝试」——CAS、ABA 和意图提交.md",
+      "last_edited_time": "2026-07-29T09:29:35.755Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "3aca2efbb18d817c83c8fa8aff72d79a": {
+      "filename": "knowledge-unit/Java/读写锁的四个可重入场景及其规则.md",
+      "last_edited_time": "2026-07-29T09:27:31.512Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "3aca2efbb18d817c9f86fe529c79cb7a": {
+      "filename": "knowledge-unit/Java/wait notify 的三个陷阱：丢失信号、虚假唤醒、共享监视器.md",
+      "last_edited_time": "2026-07-29T09:27:31.512Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "3aca2efbb18d8189ad8af4a5a9beb5ca": {
+      "filename": "knowledge-unit/Java/事件循环 vs 线程循环：谁控制事件之间的「空闲时间」.md",
+      "last_edited_time": "2026-07-29T09:28:00.515Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "3aca2efbb18d81f0b861e1b7f6fef6aa": {
+      "filename": "knowledge-unit/Java/同步器的解剖：六个构建块构成所有同步工具.md",
+      "last_edited_time": "2026-07-29T09:29:35.755Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "3aea2efbb18d8104818ed0263a2f2807": {
+      "filename": "knowledge-unit/Java/wait notify 的本质是无状态信号，JUC 用「状态化」重新封装.md",
+      "last_edited_time": "2026-07-31T10:32:11.417Z",
+      "synced_at": "2026-07-31T15:59:39.457Z"
+    }
+  }
+}

@@ -10,9 +10,11 @@ description: >-
 
 ## Vault location
 
-`/home/unt/knowledge/`
+The Obsidian vault root is the **repository root** (the whole repo is the vault). All paths below are relative to the repo root, so the same layout works across machines via git.
 
-Organized by **topic folders** (e.g. `AI/`, `Kubernetes/`, `分布式/`, `java知识体系/`), not a flat root. Prefer placing new notes inside the matching folder.
+The Knowledge Units tree `knowledge-unit/<Domain>/` is managed by the `notion-sync` skill — those files mirror the Notion Knowledge Units database and are written local-first by `knowledge-modeling`. When working inside `knowledge-unit/`, follow the naming and frontmatter conventions from `notion-sync`'s [references/local-format.md](../notion-sync/references/local-format.md).
+
+Other notes may live in **topic folders** (e.g. `AI/`, `Kubernetes/`, `分布式/`, `java知识体系/`), not a flat root. Prefer placing new non-Knowledge-Unit notes inside the matching folder.
 
 ## Naming conventions
 
@@ -29,14 +31,14 @@ Organized by **topic folders** (e.g. `AI/`, `Kubernetes/`, `分布式/`, `java�
 
 ### Search for notes
 
-Use Grep/Glob on the vault path (preferred), or:
+Use Grep/Glob on the vault root (preferred), or:
 
 ```bash
 # Search by filename
-find "/home/unt/knowledge/" -name "*.md" | grep -i "keyword"
+find . -name "*.md" | grep -i "keyword"
 
 # Search by content
-grep -rl "keyword" "/home/unt/knowledge/" --include="*.md"
+grep -rl "keyword" . --include="*.md"
 ```
 
 ### Create a new note
@@ -49,11 +51,11 @@ grep -rl "keyword" "/home/unt/knowledge/" --include="*.md"
 ### Find related notes / backlinks
 
 ```bash
-grep -rl "\[\[Note Title\]\]" "/home/unt/knowledge/"
+grep -rl "\[\[Note Title\]\]" .
 ```
 
 ### Find index-style notes
 
 ```bash
-find "/home/unt/knowledge/" -iname "*index*" -o -iname "*索引*"
+find . -iname "*index*" -o -iname "*索引*"
 ```

@@ -194,6 +194,16 @@
       "filename": "knowledge-unit/Java/wait notify 的本质是无状态信号，JUC 用「状态化」重新封装.md",
       "last_edited_time": "2026-07-31T10:32:11.417Z",
       "synced_at": "2026-07-31T15:59:39.457Z"
+    },
+    "3b1a2efb-b18d-81ff-bd94-cb4d4ffecc33": {
+      "filename": "knowledge-unit/Java/嵌套监视器死锁：wait只放内层锁，外层锁把通知方挡死在门外.md",
+      "last_edited_time": "2026-08-03T02:18:57.099Z",
+      "synced_at": "2026-08-03T02:18:57.099Z"
+    },
+    "3b1a2efb-b18d-818e-a270-c402ba3dd053": {
+      "filename": "knowledge-unit/Java/Slipped Conditions：检查与行动分属两个锁块，中间的释放窗口让别的线程溜进来.md",
+      "last_edited_time": "2026-08-03T02:18:57.849Z",
+      "synced_at": "2026-08-03T02:18:57.849Z"
     }
   }
 }

@@ -108,12 +108,18 @@ Produce 1-5 candidate Knowledge Units. Present them as a draft for the user to r
 
 Engage the user before compressing:
 
+0. **Ground the material first.** Before asking anything, lay out the source material clearly and completely enough that the user can reason about it from your output alone. Discussion is a shared activity — it fails the moment the user is being quizzed on material they have not been shown. Specifically:
+   - Do **not** assume the user has read the source. The source may have been fetched by the agent (e.g. via a web reader); the user has not seen it.
+   - Do **not** summarize so thinly that the discussion question references entities/examples the user has never been introduced to (e.g. "why does V2 fix V1's bug?" before explaining what V1 and V2 are).
+   - Explain the core mechanism, the key examples, and any structure the upcoming questions will lean on, in the user's own language (Chinese if the user is writing in Chinese).
+   - Only after the material is on the table may you move to the steps below. If you catch yourself about to ask "why does X happen?" — first make sure X has been described.
 1. **Diverge**: What does this make the user think of? Surface nearby concepts, prerequisites, contradictions, analogies.
 2. **Challenge**: Ask "why?" and "what if not?" Push past surface understanding.
 3. **Connect**: Look for shared models across domains. "Have we seen this pattern before?"
 4. **Compress**: Only after discussion, run the four-question pipeline.
 
 Key principles for discussion:
+- **Grounding first, questioning second.** Never put a "why / what if" question to the user before the relevant facts and mechanism are in front of them. A challenge question built on unexplained material is not discussion — it is a pop quiz, and it erodes trust.
 - User's own associations are first-class signals, even if not in the source material.
 - Record the user's understanding in their own words, not a paraphrase of the source.
 - Preserve ambiguity when understanding is incomplete — mark as `Raw` or `Draft`.
@@ -154,6 +160,18 @@ Unit N: [Name]
 ```
 
 Ask: "确认写入 Notion？需要调整吗？"
+
+### Step 4.5: Compression Quality Bar
+
+Before showing a unit to the user, verify it passes three quality gates. A unit that fails these is not a Knowledge Unit — it is a tutorial, a paraphrase, or a set of lecture notes, and should be rewritten.
+
+1. **Compress, don't retell.** A Knowledge Unit is a cognitive compression — one insight that reframes understanding, supported by minimal scaffolding. It is not a walkthrough of the source. Symptoms of failure: enumerating "V1 / V2 / V3", listing every variant or fix the source tried, walking the reader through a three-act history. Ask: could a reader who already half-understands the topic extract the *one reframe* in under ten seconds? If the punchline is buried under narration, rewrite. The fix is almost always: move the core claim to the top, cut the narrative, keep only the evidence that proves the claim.
+
+2. **Self-contained.** A reader must understand the unit from its own text alone, without having read the source, without having read sibling units, without recognizing any local jargon. No "as we saw in V2", no "the FairLock three-step evolution", no references that assume Jenkov's or any other author's narrative. If a phrase only makes sense to someone who has read the original, either expand it inline or cut it. Cross-references to other units are for *relations*, not for *comprehension*.
+
+3. **Code is evidence, not the subject.** Code snippets are welcome and often necessary — a concurrency unit without code is "文字太贫瘠". But code serves the insight; it is not the body. Keep the smallest snippet that proves the point (often 2–5 lines), annotate the load-bearing line with a comment, and let the surrounding prose point at it. Do not reproduce a full class, do not show "fix version 1 then fix version 2 then final version" — that is teaching, not compressing. If the snippet is longer than the prose around it, the unit has flipped from insight-first into tutorial.
+
+A concrete self-check: hold the candidate next to an existing high-quality unit in the vault (e.g. `非阻塞算法的核心是「不阻塞，只尝试」`). The new unit should read the same way — a one-line essence up front, the model unpacked in a few sentences, evidence in service of the claim, tradeoff and transfer crisp. If it reads heavier, drier, or more like documentation, it has failed the bar; rewrite before showing the user.
 
 ### Step 5: Write Local-first, then Push to Notion
 

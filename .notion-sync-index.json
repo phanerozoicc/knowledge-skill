@@ -47,8 +47,8 @@
     },
     "36ba2efbb18d81eca8a1fa0abfadf008": {
       "filename": "knowledge-unit/JVM/伪共享：无关变量因 cache line 粒度互相踢失效.md",
-      "last_edited_time": "2026-05-25T15:56:15.042Z",
-      "synced_at": "2026-07-31T15:59:39.457Z"
+      "last_edited_time": "2026-08-03T02:30:00.000Z",
+      "synced_at": "2026-08-03T02:30:00.000Z"
     },
     "36ba2efbb18d81f38e85df919279e429": {
       "filename": "knowledge-unit/JVM/内存屏障控制同步时机，MESI 提供同步能力，缺一不可.md",
@@ -204,6 +204,11 @@
       "filename": "knowledge-unit/Java/Slipped Conditions：检查与行动分属两个锁块，中间的释放窗口让别的线程溜进来.md",
       "last_edited_time": "2026-08-03T02:18:57.849Z",
       "synced_at": "2026-08-03T02:18:57.849Z"
+    },
+    "3b1a2efb-b18d-815e-a969-d842e3b40241": {
+      "filename": "knowledge-unit/Backend/粒度错配：上层以为单元独立，下层粒度更粗，无关单元被强行耦合.md",
+      "last_edited_time": "2026-08-03T02:30:00.000Z",
+      "synced_at": "2026-08-03T02:30:00.000Z"
     }
   }
 }

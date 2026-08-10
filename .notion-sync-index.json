@@ -22,8 +22,8 @@
     },
     "36ba2efbb18d81b0a48af04376917f52": {
       "filename": "knowledge-unit/JVM/happens-before 是 JMM 唯一的核心抽象.md",
-      "last_edited_time": "2026-05-25T15:56:14.979Z",
-      "synced_at": "2026-07-31T15:59:39.457Z"
+      "last_edited_time": "2026-08-03T03:00:00.000Z",
+      "synced_at": "2026-08-03T03:00:00.000Z"
     },
     "36ba2efbb18d810bb349dae5639bf7ce": {
       "filename": "knowledge-unit/Java/Jenkov - Java volatile 关键字.md",
@@ -209,6 +209,11 @@
       "filename": "knowledge-unit/Backend/粒度错配：上层以为单元独立，下层粒度更粗，无关单元被强行耦合.md",
       "last_edited_time": "2026-08-03T02:30:00.000Z",
       "synced_at": "2026-08-03T02:30:00.000Z"
+    },
+    "3b7a2efb-b18d-81cf-b9a2-fc8f566c86a1": {
+      "filename": "knowledge-unit/Java/Thread Congestion：共享点太窄时，加线程不只无功，过了临界点会反向塌方.md",
+      "last_edited_time": "2026-08-03T03:10:00.000Z",
+      "synced_at": "2026-08-03T03:10:00.000Z"
     }
   }
 }

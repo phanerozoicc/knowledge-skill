@@ -1,1 +1,0 @@
-/home/unt/code/DeepTutor/SKILL.md

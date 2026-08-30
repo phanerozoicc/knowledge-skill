@@ -1,11 +1,6 @@
 ---
 name: writing-shape
-description: >-
-  Writing exploit phase: shape a raw-material Markdown pile into an article
-  paragraph by paragraph, choosing formats deliberately. Use when explicitly
-  invoked (/writing-shape) with a fragments file, or when the user wants
-  paragraph-level shaping / "逐段成型" / "塑造成文章". Prefer writing-beats when
-  the focus is concept grounding journeys instead of format/transition craft.
+description: Writing, exploit — shape raw material into an article, paragraph by paragraph.
 disable-model-invocation: true
 ---
 

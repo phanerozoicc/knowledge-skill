@@ -1,10 +1,6 @@
 ---
 name: writing-fragments
-description: >-
-  Writing explore phase: mine raw fragments via relentless interview, no
-  structure yet. Use when explicitly invoked (/writing-fragments) or when the
-  user wants to brainstorm, collect writing material, dig fragments, or says
-  "帮我收集写作素材", "头脑风暴一下这个话题", "先挖片段".
+description: Writing, explore — mine raw fragments, no structure yet.
 disable-model-invocation: true
 ---
 
@@ -79,9 +75,5 @@ Append silently. Don't ask permission for each fragment. Mention what you added 
 Before every write: re-read the file from disk. The user may have edited, reordered, or deleted fragments between turns — preserve their changes. Never overwrite the file; only append (or, if the user asks, edit a specific fragment in place).
 
 The user can say "cut the last one", "rewrite that one sharper", "merge those two" at any time. Treat those as first-class instructions.
-
-## Next steps
-
-When explore is done, hand off to `writing-beats` (journey/grounding) or `writing-shape` (paragraph shaping) with the fragments file.
 
 </supporting-info>

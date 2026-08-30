@@ -1,11 +1,6 @@
 ---
 name: writing-beats
-description: >-
-  Writing exploit phase: assemble a raw-material Markdown pile into a
-  choose-your-own-adventure journey of beats, grounding each concept before
-  later beats lean on it. Use when explicitly invoked (/writing-beats) with a
-  fragments file, or when the user wants beat-by-beat article assembly /
-  "按节拍写" / "grounding 旅程".
+description: Writing, exploit — assemble raw material into a journey of beats, grounding each term before a beat leans on it.
 disable-model-invocation: true
 ---
 

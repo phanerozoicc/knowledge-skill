@@ -1,17 +1,13 @@
 ---
 name: handoff
-description: >-
-  Compact the current conversation into a handoff document for another agent.
-  Use when explicitly invoked (/handoff) or when the user says "交接",
-  "写个 handoff", "留给下一个 agent". Optional argument: what the next session
-  will focus on.
+description: Compact the current conversation into a handoff document for another agent to pick up.
 argument-hint: "What will the next session be used for?"
 disable-model-invocation: true
 ---
 
-Write a handoff document summarising the current conversation so a fresh agent can continue the work. Save to the temporary directory of the user's OS — not the current workspace (e.g. `/tmp/handoff-<topic>.md` on Linux).
+Write a handoff document summarising the current conversation so a fresh agent can continue the work. Save to the temporary directory of the user's OS - not the current workspace.
 
-Include a "suggested skills" section naming project skills the next agent should invoke (from `.agents/skills/` / `.cursor/skills/`).
+Include a "suggested skills" section in the document, naming which skills the next agent should call the Skill tool for.
 
 Do not duplicate content already captured in other artifacts (specs, plans, ADRs, issues, commits, diffs). Reference them by path or URL instead.
 

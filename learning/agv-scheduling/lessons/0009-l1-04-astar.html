@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>L1-04 · 单车路径规划:A* 算法(工业标配)</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .trace {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: .8rem;
+    line-height: 1.6;
+    background: var(--code-bg);
+    padding: 1rem;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    margin: 1rem 0;
+  }
+  .trace .step { color: var(--accent); font-weight: 600; }
+  .trace .h-val { color: #8a5a2a; }
+  .trace .best { background: #fff3b0; }
+  .grid-vis {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: .82rem;
+    line-height: 1.5;
+    background: #f7f5ee;
+    padding: 1rem;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    margin: 1rem 0;
+    border: 1px solid var(--rule);
+  }
+  .try-it {
+    border: 2px dashed var(--accent);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    margin: 1.5rem 0;
+    background: #f7fbfd;
+  }
+  .try-it h4 { margin-top: 0; color: var(--accent); }
+</style>
+</head>
+<body>
+
+<h1>L1-04 · 单车路径规划:A* 算法(工业标配)</h1>
+
+<div class="lesson-meta">
+  <span class="tag">阶段 L1 单机能力</span>
+  <span class="tag">难度:中等(动手)</span>
+  <span class="tag">前置:L1-03</span>
+  <span class="tag">预计:60 分钟</span>
+  <span class="tag">⭐ 工业核心</span>
+</div>
+
+<div class="section-goal">
+  <strong>🎯 这节课你将学会:</strong>实现并理解 A* 算法——它是<strong>工业 AGV/AMR 系统里单车路径规划的事实标准</strong>。你会发现 A* 只是给 Dijkstra 加了一个"方向感"(启发函数 h),改动极小但效果惊人。学完这课,你就掌握了单车路径规划的完整武器库,可以开始进 L2(多机)了。
+</div>
+
+<h2 id="the-idea">A* 的核心:给 Dijkstra 加方向感</h2>
+
+<p>上一课结尾,Dijkstra 留下一个痛点:<strong>它没有方向感</strong>。目标明明在东边,它却往西边也搜,白白浪费计算。A* 解决的正是这个问题。</p>
+
+<blockquote>
+<p><strong>A* = Dijkstra,但排序时不仅看"已经花了多少代价(g)",还加上"估计到目标还要多少代价(h)"。</strong></p>
+<p>排序规则从 <code>g</code> 变成 <code>f = g + h</code>。就这一处改动。</p>
+</blockquote>
+
+<table>
+<thead><tr><th>算法</th><th>排序依据</th><th>含义</th></tr></thead>
+<tbody>
+<tr><td>Dijkstra</td><td><code>g</code>(已花代价)</td><td>"谁目前累计代价小,先扩展谁"</td></tr>
+<tr><td><strong>A*</strong></td><td><code>f = g + h</code></td><td>"谁<strong>预计总代价</strong>小,先扩展谁" → 优先扩展"既便宜又靠近目标"的</td></tr>
+</tbody>
+</table>
+
+<p>三个字母的含义,这是 A* 全部的理论:</p>
+<ul>
+<li><strong>g(n)</strong>:从起点到 n 的<strong>已知</strong>代价(实测的,精确)</li>
+<li><strong>h(n)</strong>:从 n 到目标的<strong>估计</strong>代价(猜的,启发函数)</li>
+<li><strong>f(n) = g + h</strong>:预计的总代价,排序用这个</li>
+</ul>
+
+<div class="backend-analogy">
+A* 就是你做<strong>带业务直觉的搜索</strong>。
+<ul>
+<li>Dijkstra ≈ 老老实实 BFS,把所有可能性同等对待,像新手工程师排查 bug 没方向地乱看。</li>
+<li>A* ≈ 资深工程师排查 bug,有<strong>经验直觉</strong>:"问题大概率在数据库层",先去那里看(h 小),而不是平均用力。</li>
+</ul>
+h 就是那个"经验直觉"。它让搜索<strong>优先往目标方向使劲</strong>,而不是无方向扩散。
+</div>
+
+<h2 id="heuristic">启发函数 h:成败的关键</h2>
+
+<p>A* 的全部魔法,都藏在 h 怎么设计。这是 A* 唯一的难点,我给你讲透。</p>
+
+<h3>h 怎么算:几何距离</h3>
+
+<p>最常见:用 n 到目标的<strong>几何距离</strong>作为 h。因为现实中,两点间直线距离是"最少还要走多远"的下界——你不可能比直线更短。</p>
+
+<figure class="svg-fig">
+<svg viewBox="0 0 440 250" xmlns="http://www.w3.org/2000/svg">
+  <text x="220" y="22" text-anchor="middle" font-size="13" font-weight="600" fill="#0b6e99">栅格上两种启发函数 h</text>
+  <!-- 网格 -->
+  <g stroke="#e0e0e0" stroke-width="0.5">
+    <line x1="60" y1="60" x2="60" y2="210"/>
+    <line x1="100" y1="60" x2="100" y2="210"/>
+    <line x1="140" y1="60" x2="140" y2="210"/>
+    <line x1="180" y1="60" x2="180" y2="210"/>
+    <line x1="220" y1="60" x2="220" y2="210"/>
+    <line x1="260" y1="60" x2="260" y2="210"/>
+    <line x1="300" y1="60" x2="300" y2="210"/>
+    <line x1="60" y1="60" x2="300" y2="60"/>
+    <line x1="60" y1="90" x2="300" y2="90"/>
+    <line x1="60" y1="120" x2="300" y2="120"/>
+    <line x1="60" y1="150" x2="300" y2="150"/>
+    <line x1="60" y1="180" x2="300" y2="180"/>
+    <line x1="60" y1="210" x2="300" y2="210"/>
+  </g>
+  <!-- 当前格 (2,3) -->
+  <rect x="142" y="148" width="38" height="32" fill="#e7f2f8" stroke="#0b6e99" stroke-width="1.5"/>
+  <text x="161" y="168" text-anchor="middle" font-size="10" fill="#0b6e99" font-weight="600">当前</text>
+  <text x="161" y="180" text-anchor="middle" font-size="8" fill="#0b6e99">(2,3)</text>
+  <!-- 目标 (8,1) -->
+  <rect x="262" y="58" width="38" height="32" fill="#fef3e2" stroke="#b54708" stroke-width="1.5"/>
+  <text x="281" y="78" text-anchor="middle" font-size="10" fill="#b54708" font-weight="600">目标</text>
+  <text x="281" y="90" text-anchor="middle" font-size="8" fill="#b54708">(8,1)</text>
+
+  <!-- 曼哈顿路径(横竖) -->
+  <polyline points="180,165 280,165 280,75" stroke="#5a8a2a" stroke-width="2.5" stroke-dasharray="5 3" fill="none"/>
+  <text x="230" y="158" text-anchor="middle" font-size="10" fill="#5a8a2a">曼哈顿 |dx|+|dy|=8</text>
+
+  <!-- 欧几里得直线 -->
+  <line x1="180" y1="165" x2="280" y2="75" stroke="#b54708" stroke-width="2.5"/>
+  <text x="208" y="110" font-size="10" fill="#b54708">欧几里得 ≈6.3</text>
+
+  <!-- 图例 -->
+  <line x1="60" y1="232" x2="80" y2="232" stroke="#5a8a2a" stroke-width="2.5" stroke-dasharray="5 3"/>
+  <text x="86" y="236" font-size="10" fill="#595959">曼哈顿(只能横竖)</text>
+  <line x1="210" y1="232" x2="230" y2="232" stroke="#b54708" stroke-width="2.5"/>
+  <text x="236" y="236" font-size="10" fill="#595959">欧几里得(可斜走)</text>
+</svg>
+<figcaption>曼哈顿距离走 L 形(8),欧几里得走直线(≈6.3)。两者都是 h,选哪种看车能不能斜走</figcaption>
+</figure>
+
+<h3>可采纳性(Admissibility):A* 保证最优的前提</h3>
+
+<p>这是 A* 最重要的一个性质,一句话:</p>
+
+<blockquote>
+<p><strong>只要 h(n) ≤ 真实剩余代价,A* 就保证找到最优解。</strong> 这叫 h 是「可采纳的」。</p>
+</blockquote>
+
+<div class="callout">
+<span class="callout-title">🔑 直觉:为什么不能高估</span>
+h 是"乐观估计"。如果 h 高估(悲观,觉得"还很远"),f=g+h 就被带偏,可能优先扩展<strong>错误</strong>的方向,导致找到次优解甚至绕远路。<br><br>
+几何距离天生可采纳——因为"直线距离"一定是真实最短路的<strong>下界</strong>(不会比真实还远)。所以用几何距离做 h,A* 既快又保证最优。这是工业标配的原因。
+</div>
+
+<table>
+<thead><tr><th>h 的大小</th><th>效果</th><th>结果</th></tr></thead>
+<tbody>
+<tr><td>h = 0</td><td>没有方向感</td><td><strong>退化成 Dijkstra</strong>(慢但最优)</td></tr>
+<tr><td>0 < h ≤ 真实</td><td>有方向感且乐观</td><td>✅ <strong>又快又最优(理想)</strong></td></tr>
+<tr><td>h > 真实</td><td>方向感过强(贪婪)</td><td>更快,但<strong>可能次优</strong></td></tr>
+<tr><td>h = 真实</td><td>完美预知</td><td>直接走最优路,零浪费(理论极限)</td></tr>
+</tbody>
+</table>
+
+<div class="callout warn">
+<span class="callout-title">⚠️ 工程取舍:贪婪 A*</span>
+有时候工业上<strong>故意</strong>让 h 稍微高估,换取速度,接受一点点次优。这又回到 L0-05 的「最优解 vs 可行解」——在实时场景下,"快 10 倍但代价多 5%" 经常完胜。这叫 weighted A*。L2 多车场景下会常用。
+</div>
+
+<h2 id="code">A* 完整代码(和 Dijkstra 对比着看)</h2>
+
+<p>准备好了——你会看到 A* 的代码和 Dijkstra<strong>几乎一模一样</strong>,只多了两行。这是本课最该记住的事实。</p>
+
+<pre><code># astar.py
+import heapq
+import math
+
+def heuristic(a, b):
+    """启发函数:两点间欧几里得距离。
+    注意——这里需要节点的坐标,所以图里每个节点要带 (x,y)。
+    下面 positions 是额外加的坐标信息。"""
+    ax, ay = positions[a]
+    bx, by = positions[b]
+    return math.hypot(bx - ax, by - ay)
+
+def astar(graph, start, goal):
+    g = {start: 0}
+    parent = {start: None}
+    # ★ 唯一改动 1:优先队列按 f = g + h 排序,而不是 g
+    pq = [(heuristic(start, goal), start)]
+    visited = set()
+
+    while pq:
+        f_u, u = heapq.heappop(pq)      # f 最小的先出
+
+        if u in visited:
+            continue
+        visited.add(u)
+
+        if u == goal:
+            path = []
+            node = goal
+            while node is not None:
+                path.append(node)
+                node = parent[node]
+            return g[goal], path[::-1]
+
+        for v, w in graph.get(u, {}).items():
+            new_g = g[u] + w
+            if v not in g or new_g < g[v]:
+                g[v] = new_g
+                parent[v] = u
+                # ★ 唯一改动 2:推入堆时用 f = new_g + h,而不是 new_g
+                f_v = new_g + heuristic(v, goal)
+                heapq.heappush(pq, (f_v, v))
+
+    return None, []</code></pre>
+
+<div class="callout">
+<span class="callout-title">🔑 看清楚了吗</span>
+相比 L1-03 的 Dijkstra,A* 的代码<strong>只改了两行</strong>(标 ★ 的):初始堆用 h、推入堆用 f=g+h。其余<strong>一模一样</strong>。这就是为什么说"搜索算法都是同一个框架,只是换排序规则"。你已经掌握的 Dijkstra 知识,99% 都适用于 A*。
+</div>
+
+<h2 id="data-needed">一个工程细节:A* 需要坐标</h2>
+
+<p>注意 A* 比 Dijkstra 多需要一样东西:<strong>每个节点的物理坐标 (x,y)</strong>,用来算 h。所以我们的地图模型要扩展:</p>
+
+<pre><code># 扩展地图:除了邻接表,还要有节点坐标(用于算启发函数)
+graph = {
+    "入口":  {"主道": 5},
+    "主道":  {"入口": 5, "岔口A": 3, "岔口B": 6},
+    "岔口A": {"主道": 3, "货架1": 4},
+    "岔口B": {"主道": 6, "货架2": 2, "货架3": 7},
+    "货架1": {"岔口A": 4},
+    "货架2": {"岔口B": 2, "货架3": 3},
+    "货架3": {"岔口B": 7, "货架2": 3},
+}
+
+# ★ 新增:每个节点的物理坐标(米)
+positions = {
+    "入口":  (0, 0),
+    "主道":  (5, 0),
+    "岔口A": (5, 3),
+    "岔口B": (11, 0),
+    "货架1": (5, 7),
+    "货架2": (11, 2),
+    "货架3": (14, 2),    # 货架3 在最右边
+}</code></pre>
+
+<div class="backend-analogy">
+这就是给数据模型<strong>加字段</strong>。Dijkstra 只需要邻接表(像只有外键的关系);A* 还需要每个节点的坐标(像加了个 <code>latitude/longitude</code> 字段)。地图建模的复杂度只多了一点点。
+</div>
+
+<h2 id="trace">A* vs Dijkstra:扩展节点对比(关键直觉)</h2>
+
+<p>从「入口」到「货架3」。货架3 在右边(14,2)。我们对比两者<strong>各扩展了哪些节点</strong>:</p>
+
+<figure class="svg-fig">
+<svg viewBox="0 0 520 280" xmlns="http://www.w3.org/2000/svg">
+  <!-- 左:Dijkstra -->
+  <text x="115" y="22" text-anchor="middle" font-size="12" font-weight="600" fill="#0b6e99">Dijkstra(无方向感,7 个节点)</text>
+  <g stroke="#888" stroke-width="1.5" fill="none">
+    <line x1="50" y1="55" x2="50" y2="110"/>
+    <line x1="50" y1="110" x2="115" y2="185"/>
+    <line x1="50" y1="110" x2="170" y2="185"/>
+    <line x1="115" y1="185" x2="115" y2="240"/>
+    <line x1="170" y1="185" x2="170" y2="240"/>
+    <line x1="170" y1="185" x2="205" y2="240"/>
+    <line x1="170" y1="240" x2="205" y2="240"/>
+  </g>
+  <!-- 全部高亮(都被扩展) -->
+  <g>
+    <circle cx="50" cy="55" r="14" fill="#e7f2f8" stroke="#0b6e99" stroke-width="2"/><text x="50" y="59" text-anchor="middle" font-size="8" font-weight="600">入口</text>
+    <circle cx="50" cy="110" r="14" fill="#e7f2f8" stroke="#0b6e99" stroke-width="2"/><text x="50" y="114" text-anchor="middle" font-size="8">主道</text>
+    <circle cx="115" cy="185" r="14" fill="#e7f2f8" stroke="#0b6e99" stroke-width="2"/><text x="115" y="189" text-anchor="middle" font-size="7">岔口A</text>
+    <circle cx="170" cy="185" r="14" fill="#e7f2f8" stroke="#0b6e99" stroke-width="2"/><text x="170" y="189" text-anchor="middle" font-size="7">岔口B</text>
+    <circle cx="115" cy="240" r="14" fill="#e7f2f8" stroke="#0b6e99" stroke-width="2"/><text x="115" y="244" text-anchor="middle" font-size="7">货架1</text>
+    <circle cx="170" cy="240" r="14" fill="#e7f2f8" stroke="#0b6e99" stroke-width="2"/><text x="170" y="244" text-anchor="middle" font-size="7">货架2</text>
+    <circle cx="205" cy="240" r="14" fill="#fff3b0" stroke="#0b6e99" stroke-width="2"/><text x="205" y="244" text-anchor="middle" font-size="7">货架3</text>
+  </g>
+  <text x="115" y="265" text-anchor="middle" font-size="10" fill="#595959">几乎全图都扩展了(包括远离目标的货架1)</text>
+
+  <!-- 分隔 -->
+  <line x1="245" y1="30" x2="245" y2="265" stroke="#d9d9d9"/>
+
+  <!-- 右:A* -->
+  <text x="380" y="22" text-anchor="middle" font-size="12" font-weight="600" fill="#5a8a2a">A*(有方向感,5 个节点)</text>
+  <g stroke="#888" stroke-width="1.5" fill="none">
+    <line x1="315" y1="55" x2="315" y2="110"/>
+    <line x1="315" y1="110" x2="435" y2="185"/>
+    <line x1="435" y1="185" x2="435" y2="240"/>
+    <line x1="435" y1="185" x2="470" y2="240"/>
+    <line x1="435" y1="240" x2="470" y2="240"/>
+  </g>
+  <!-- 只高亮被扩展的 -->
+  <g>
+    <circle cx="315" cy="55" r="14" fill="#e7f2f8" stroke="#0b6e99" stroke-width="2"/><text x="315" y="59" text-anchor="middle" font-size="8" font-weight="600">入口</text>
+    <circle cx="315" cy="110" r="14" fill="#e7f2f8" stroke="#0b6e99" stroke-width="2"/><text x="315" y="114" text-anchor="middle" font-size="8">主道</text>
+    <!-- 岔口A 未扩展(灰) -->
+    <circle cx="380" cy="185" r="14" fill="#f5f3ee" stroke="#ccc" stroke-width="1" stroke-dasharray="2 2"/><text x="380" y="189" text-anchor="middle" font-size="7" fill="#bbb">岔口A</text>
+    <circle cx="435" cy="185" r="14" fill="#e7f2f8" stroke="#0b6e99" stroke-width="2"/><text x="435" y="189" text-anchor="middle" font-size="7">岔口B</text>
+    <!-- 货架1 未扩展(灰) -->
+    <circle cx="380" cy="240" r="14" fill="#f5f3ee" stroke="#ccc" stroke-width="1" stroke-dasharray="2 2"/><text x="380" y="244" text-anchor="middle" font-size="7" fill="#bbb">货架1</text>
+    <circle cx="435" cy="240" r="14" fill="#e7f2f8" stroke="#0b6e99" stroke-width="2"/><text x="435" y="244" text-anchor="middle" font-size="7">货架2</text>
+    <circle cx="470" cy="240" r="14" fill="#fff3b0" stroke="#0b6e99" stroke-width="2"/><text x="470" y="244" text-anchor="middle" font-size="7">货架3</text>
+  </g>
+  <text x="380" y="265" text-anchor="middle" font-size="10" fill="#5a8a2a">跳过了岔口A、货架1(离目标远,f 值大)</text>
+</svg>
+<figcaption>同样的最优结果(代价 16),A* 少扩展节点。地图越大优势越夸张</figcaption>
+</figure>
+
+<div class="callout">
+<span class="callout-title">🎉 这就是 A* 成为工业标配的原因</span>
+<strong>同样的最优结果,少得多的计算。</strong> 在实时 AGV 调度里(每秒可能要给几十台车重算路径),A* 省下的计算直接转化为系统能调度的车辆数。这就是为什么几乎所有工业 AGV/AMR 系统的单车规划都用 A*(或它的变体)。
+</div>
+
+<h2 id="humanoid">人形伏笔</h2>
+
+<div class="backend-analogy">
+A* 在人形里依然核心,但有两个升级:
+<ul>
+<li><strong>启发函数变难</strong>:2D 地图里 h 就是欧几里得距离,简单。但人形是几十个关节的高维空间,"到目标的距离"很难定义——这就是为什么高维规划常换用 RRT(L1-06)。</li>
+<li><strong>加权 A* 更常用</strong>:人形规划成本极高,工业上常用 weighted A*(故意高估 h)换速度,接受次优。这呼应 L0-05 的"最优 vs 可行"。</li>
+</ul>
+但"带方向感的搜索"这个思想,A* 到 RRT 一脉相承。地基不变。
+</div>
+
+<h2 id="recap">小结</h2>
+
+<ul>
+<li>A* = Dijkstra + 启发函数 h。排序从 g 变成 <strong>f = g + h</strong>。代码只差两行。</li>
+<li>h 是"到目标的乐观估计",常用几何距离。</li>
+<li><strong>可采纳性</strong>:h ≤ 真实剩余代价时,A* 保证最优。几何距离天生可采纳。</li>
+<li>同样最优结果,A* 比 Dijkstra 扩展更少节点(有方向感)→ 工业标配。</li>
+<li>工程取舍:weighted A*(故意高估 h)牺牲最优换速度,实时场景常用。</li>
+</ul>
+
+<div class="try-it">
+<h4>🔧 动手练习(本课核心,请务必跑 —— 同时覆盖 L1-03 和 L1-04)</h4>
+<p>这是你的<strong>动手学习约定</strong>的第一课实操。任务:</p>
+<ol>
+<li><strong>建文件</strong>:把 L1-03 的 <code>dijkstra</code> + 本课的 <code>astar</code> + <code>graph</code> + <code>positions</code>,都放进一个 <code>planning.py</code>。</li>
+<li><strong>加计数器</strong>:在两个函数里各加一行,统计「弹出的节点数」(每 <code>heappop</code> 一次就 +1,用全局变量或返回值都行)。</li>
+<li><strong>运行对比</strong>:对同一个查询 <code>入口→货架3</code>,分别调用 Dijkstra 和 A*,打印:<br>
+<code>Dijkstra: 代价=?, 弹出节点数=?</code><br>
+<code>A*:       代价=?, 弹出节点数=?</code></li>
+<li><strong>回答我</strong>:把两行输出原样发给我。然后回答——<strong>A* 弹出的节点数比 Dijkstra 少吗?代价一样吗?</strong></li>
+</ol>
+<p style="color:var(--muted);font-size:.9rem;">这个练习<strong>一次性把 L1-03 和 L1-04 的代码都跑了</strong>,不用回头补。看到"A* 代价相同但节点更少",你会对 A* 的价值有不可逆的体感。这是算法扎根的关键一步。</p>
+</div>
+
+<div class="section-quiz">
+<strong>✅ 自测(每题答案 4 个字,完全等长)</strong>
+<ol>
+<li>A* 相比 Dijkstra,排序时除了 g 还加上了什么量?(一个字母)</li>
+<li>A* 用的"到目标的乐观估计",叫什么函数?</li>
+<li>保证 A* 找到最优解的前提,叫 h 的什么性质?</li>
+<li>当 h 恒为 0 时,A* 退化成什么算法?</li>
+</ol>
+</div>
+
+<div class="section-source">
+<strong>🔗 推荐主源(本课强烈推荐看)</strong><br>
+<a href="https://www.redblobgames.com/pathfinding/a-star/introduction.html">Red Blob Games:A* 完整教程</a> —— <strong>全网最好的 A* 可视化</strong>,有动画对比 Dijkstra vs A* 的扩展范围。看完你会对"方向感"有深刻印象。这是 L1 全程的伴读教材,本课是它的高光时刻。
+</div>
+
+<div class="section-ask">
+<strong>❓ 有问题随时问。</strong>这课的动手练习是你的<strong>动手学习约定</strong>的第一次兑现,我会等你的运行结果。如果遇到任何报错(比如坐标对不上、节点数统计不对),把错误发我,我们一起看。<strong>这一步跑通,你就算真正扎根了单车路径规划。</strong>
+</div>
+
+<div class="lesson-nav">
+  <a href="0008-l1-03-dijkstra.html">← 上一课:L1-03 Dijkstra</a>
+  <a class="next" href="0010-l1-05-trajectory.html">下一课:L1-05 运动学与轨迹 →</a>
+</div>
+
+</body>
+</html>

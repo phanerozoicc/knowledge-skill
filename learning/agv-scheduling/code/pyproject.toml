@@ -1,0 +1,22 @@
+[project]
+name = "scheduler-core"
+version = "0.1.0"
+description = "Industrial-grade AGV/humanoid scheduling core: reservation table + scheduler loop"
+requires-python = ">=3.12"
+dependencies = [
+    "intervaltree>=3.1.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["scheduler", "sim"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

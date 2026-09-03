@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>L0-04 · 后端经验如何迁移</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .mapping-table { font-size: .92rem; }
+  .mapping-table th:first-child, .mapping-table td:first-child { width: 26%; }
+  .mapping-table th:nth-child(2), .mapping-table td:nth-child(2) { width: 34%; }
+  .translate-box {
+    border: 2px solid var(--accent);
+    border-radius: 8px;
+    padding: 1rem 1.3rem;
+    margin: 1.5rem 0;
+    background: linear-gradient(180deg, #f7fbfd 0%, #fff 100%);
+  }
+  .translate-box h4 {
+    margin-top: 0;
+    color: var(--accent);
+    border-bottom: 1px solid var(--accent-soft);
+    padding-bottom: .3rem;
+  }
+  .arrow { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>L0-04 · 后端经验如何迁移(加速器)</h1>
+
+<div class="lesson-meta">
+  <span class="tag">阶段 L0 地基</span>
+  <span class="tag">难度:入门</span>
+  <span class="tag">前置:L0-03</span>
+  <span class="tag">预计:45 分钟</span>
+</div>
+
+<div class="section-goal">
+  <strong>🎯 这节课你将学会:</strong>把调度系统的核心概念<strong>系统性翻译</strong>成你已经熟悉的后端概念,建立一张「调度 ↔ 后端」对照表。这是整门课的加速器——后面每个新算法,你都能先问「这玩意儿在我后端经验里叫什么」,从而把学习曲线压平。本课最后,你会明确知道:<strong>你已经会了哪些,哪些是真正的新东西。</strong>
+</div>
+
+<div class="callout">
+<span class="callout-title">📌 这课的用法</span>
+本课是一张<strong>对照表 + 几个深度翻译</strong>。对照表请保存,后面每遇到新概念都回来查。深度翻译的几个例子,是为了示范「怎么把调度问题映射到后端问题」——掌握这个<strong>翻译技能</strong>比记住表更重要。
+</div>
+
+<h2 id="big-table">一、核心对照表(请保存)</h2>
+
+<p>这是本课的主干。左列是调度概念,中列是它最像的后端概念,右列是「差异在哪」——因为<strong>不存在完美映射,知道差异才能避免踩坑</strong>。</p>
+
+<table class="mapping-table">
+<thead><tr><th>调度系统概念</th><th>最像的后端概念</th><th>关键差异(别踩的坑)</th></tr></thead>
+<tbody>
+<tr><td><strong>车队</strong>(被调度的实体)</td><td>Worker 实例池 / Pod 集群</td><td>Worker 是无状态的、可随意重启;车是<strong>有物理位置的</strong>,重启不能消除它的位置</td></tr>
+<tr><td><strong>任务分配</strong>(哪台车干啥)</td><td>负载均衡器选实例</td><td>负载均衡追求"均匀";任务分配追求"全局最优",且要算<strong>物理距离</strong></td></tr>
+<tr><td><strong>路径规划</strong>(走哪条路)</td><td>网络路由(OSPF 用 Dijkstra)</td><td>网络路由是静态拓扑;路径规划要考虑<strong>运动学约束</strong>(能不能转弯)和<strong>动态障碍</strong></td></tr>
+<tr><td><strong>冲突 / 撞车</strong></td><td>并发写同一行数据</td><td>数据冲突可回滚;撞车是<strong>物理事故,不可回滚</strong>,所以调度必须<strong>预防优先</strong>而非事后修复</td></tr>
+<tr><td><strong>冲突消解(MAPF/CBS)</strong></td><td>分布式锁 + 乐观并发控制(OCC)</td><td>OCC 冲突可重试;CBS 是<strong>集中式全局重算</strong>,成本高得多</td></tr>
+<tr><td><strong>时间窗 / 预留表</strong></td><td>SELECT FOR UPDATE / 行锁</td><td>行锁是"现在占有";时间窗是"<strong>未来某段时间</strong>占有",是 4D 锁(空间+时间)</td></tr>
+<tr><td><strong>死锁</strong>(环形等待)</td><td>数据库死锁 / 分布式锁死锁</td><td>机制完全同构(4 条件),但车的死锁<strong>物理后果更严重</strong>(可能要人工推车)</td></tr>
+<tr><td><strong>交通管制</strong>(路口/单向)</td><td>限流 / 信号量 / 熔断</td><td>限流保护服务;交通管制是<strong>空间流控</strong>,保护路口通行能力</td></tr>
+<tr><td><strong>车队状态</strong>(位置/电量/任务)</td><td>服务注册中心 + 心跳 + 健康检查</td><td>多了"电量"这个后端没有的维度;位置是连续值不是离散状态</td></tr>
+<tr><td><strong>地图/拓扑</strong></td><td>数据模型 / Schema</td><td>Schema 是逻辑结构;地图是<strong>物理空间</strong>的抽象,改地图=改现实约束</td></tr>
+<tr><td><strong>指令下发</strong>(VDA5050)</td><td>RPC / 消息推送</td><td>RPC 是同步逻辑调用;指令下发要处理<strong>网络抖动+车辆执行延迟+部分完成</strong></td></tr>
+<tr><td><strong>状态上报</strong></td><td>遥测 metrics / 日志</td><td>metrics 可丢可采样;位置上报<strong>必须实时、可靠</strong>,否则调度瞎了</td></tr>
+<tr><td><strong>故障容错</strong></td><td>熔断、重试、补偿事务</td><td>后端故障可重试;车故障可能<strong>堵在路上,影响全局</strong>,必须重路由整片区域</td></tr>
+<tr><td><strong>滚动重规划</strong></td><td>增量计算 / 流处理 / 最终一致性</td><td>最终一致可接受秒级;调度重规划<strong>必须在车撞上之前完成</strong>,有硬时间约束</td></tr>
+</tbody>
+</table>
+
+<h2 id="three-translations">二、三个深度翻译(示范"怎么翻译")</h2>
+
+<p>光有表不够,我要示范<strong>翻译的思路</strong>。挑三个最关键的调度概念,完整翻译一遍。掌握这个思路,后面任何算法你都能自己翻译。</p>
+
+<div class="translate-box">
+<h4>翻译 1:冲突消解 ≈ 分布式锁,但锁是"4D 的"</h4>
+
+<p><strong>后端版本</strong>:多个请求要改同一行数据,加行锁。锁是「某个资源 ID」上的,谁拿到谁能改,改完释放。冲突检测靠版本号(OCC)或锁等待(2PL)。</p>
+
+<p><strong>调度版本</strong>:两台车要占用「同一个路段的同一个时间段」。锁不是某个资源 ID,而是 <strong>(路段 ID, 时间段)</strong> 这个二元组——既占空间,又占时间。这就是为什么 L2-02 要讲「时间窗 / 预留表」:它本质上是一张「未来谁占了哪段路哪段时间」的表,等于一张<strong>4D 锁表</strong>。</p>
+
+<p><strong>关键差异</strong>:后端锁冲突了,重试一次就行,代价低。调度冲突了,重算路径成本极高(可能要重算好几台车的路径),所以<strong>调度的并发控制更倾向于"预防"(规划时就避开)而非"事后重试"</strong>。这也是 CBS 算法的核心思想(L2-04):先乐观各算各的,撞了再针对性重算——很像乐观锁,但重算成本要算计。</p>
+
+<p class="arrow" style="margin-top:.8rem;">→ 学到 CBS 时,默念:「这就是乐观并发控制 + 冲突重算」,你就抓住了本质。</p>
+</div>
+
+<div class="translate-box">
+<h4>翻译 2:死锁防护 ≈ 数据库死锁检测,但后果不可回滚</h4>
+
+<p><strong>后端版本</strong>:事务 A 锁了行 1 等行 2,事务 B 锁了行 2 等行 1。死锁。数据库检测到后,<strong>杀掉一个事务回滚</strong>,另一个就能继续。</p>
+
+<p><strong>调度版本</strong>:车 A 占了路段 1 等路段 2,车 B 占了路段 2 等路段 1,车 C、D 加入形成环。死锁。机制<strong>完全同构</strong>(死锁四条件一模一样)。</p>
+
+<p><strong>关键差异</strong>:数据库能"杀事务回滚"——因为事务是逻辑的,可撤销。但车是<strong>物理实体</strong>,你不能让车"倒回起点",而且 4 辆车堵在环形通道里,可能<strong>需要人工进场推车</strong>,生产停摆。所以调度死锁的策略是<strong>预防为主(设计时就不让死锁条件成立)</strong>,比如单向化通道、在路口设缓冲区、用 banker 算法思想提前拒绝会引发死锁的分配。事后检测+恢复是最后兜底。</p>
+
+<p class="arrow" style="margin-top:.8rem;">→ 学到 L2-05 死锁时,默念:「死锁四条件我都熟,区别是这里不能回滚,所以要预防」,你就知道重点在哪。</p>
+</div>
+
+<div class="translate-box">
+<h4>翻译 3:任务编排 ≈ 工作流引擎,但你做的正是这个 ⭐</h4>
+
+<p><strong>后端版本</strong>:一个业务流程(如"下单→支付→发货")用工作流引擎(Temporal/Airflow/状态机)编排,每步是个 task,引擎管状态流转、重试、补偿。</p>
+
+<p><strong>调度版本(AGV)</strong>:一个搬运任务=去A→取货→去B→放下,用状态机编排。和后端工作流<strong>几乎一样</strong>。</p>
+
+<p><strong>调度版本(人形)——这是你的主场</strong>:人形任务="泡咖啡"=移动到咖啡机→识别按钮→伸手按下→等待→取杯→转身→移动→递给用户。每一步是一个<strong>技能(Skill)</strong>,技能内部还有子步骤。这<strong>就是 Temporal/Airflow 那套</strong>:长流程、可中断、可恢复、有补偿、可并行分支。</p>
+
+<p><strong>关键差异</strong>:后端工作流的 task 是纯逻辑的(调 API、查库);人形技能编排的 task 是<strong>物理的</strong>——"伸手按下"可能失败(按钮没识别到、手被挡住),失败要重试或降级,且<strong>失败时机器人处于某个物理姿态</strong>,不能简单回滚到初始态。这要求编排引擎理解"技能失败后的物理恢复"。</p>
+
+<p class="arrow" style="margin-top:.8rem;">→ 你团队现在做的"动作编排+流程编排",本质就是在造一个<strong>物理世界的 Temporal</strong>。L4-02 会深挖这个。</p>
+</div>
+
+<h2 id="arch-evolution">三、你的架构演进路线 ≈ 后端架构演进史</h2>
+
+<p>你提到当前是<strong>集中式调度</strong>,后期要支持<strong>车端自主规划 + 调度审核(请求式)</strong>。我告诉你一个会让你"啊哈"的事实:这条演进路线,和后端架构演进是<strong>同构的</strong>。</p>
+
+<table>
+<thead><tr><th>阶段</th><th>调度架构</th><th>对应后端架构</th><th>特征</th></tr></thead>
+<tbody>
+<tr><td><strong>阶段 1(你现在)</strong></td><td>集中式调度</td><td>单体服务 / 中心化调度器</td><td>所有智能在中央,车只执行。简单可控,但中央是瓶颈和单点。</td></tr>
+<tr><td><strong>阶段 2(你规划)</strong></td><td>混合式:车端规划 + 中央审核</td><td>微服务 + 网关准入控制</td><td>车有自主规划能力,但关键决策(会撞吗?会让别人死锁吗?)由中央<strong>审核批准</strong>。类似请求式准入。</td></tr>
+<tr><td><strong>阶段 3(远期)</strong></td><td>联邦式 / 分布式协商</td><td>服务网格 + 去中心化协调</td><td>车与车直接协商,中央退化为协调者。灵活但复杂。</td></tr>
+</tbody>
+</table>
+
+<div class="backend-analogy">
+你规划的「车端规划 + 调度审核」,在后端里有个精确对应:<strong>准入控制(Admission Control)</strong>。
+<ul>
+<li>就像 K8s 的调度器:节点(Pod)有自主能力,但能不能创建、放哪,由调度器审核。</li>
+<li>就像 API 网关:下游服务能自己处理请求,但网关做限流、鉴权、路由决策。</li>
+<li>就像乐观锁:客户端先自己算(车端规划),提交时中央校验冲突(调度审核),冲突则拒绝重算。</li>
+</ul>
+<strong>这意味着你规划的演进,在后端已经有大量成熟模式可借鉴</strong>:准入控制、乐观并发、最终一致性、 Saga 分布式事务。L3-01 和 L4-01 会把这些对接起来讲。
+</div>
+
+<h2 id="what-you-know">四、盘点:你已经会的 vs 真正要学的</h2>
+
+<p>经过这张对照表,现在可以明确告诉你,整个工业级调度系统里:</p>
+
+<div class="callout">
+<span class="callout-title">✅ 你已经会的(直接迁移,几乎零学习成本)</span>
+<ul>
+<li><strong>架构思维</strong>:分层、模块解耦、事件驱动 vs 轮询、状态机设计 —— 你天天在做</li>
+<li><strong>通信与协议</strong>:MQTT/gRPC、消息契约、心跳、重连 —— VDA5050 只是套个新 schema</li>
+<li><strong>容错与可靠性</strong>:熔断、重试、补偿、降级、最终一致性 —— L3-04 你会觉得"这不是我天天干的吗"</li>
+<li><strong>可观测性</strong>:metrics、日志、链路追踪、压测 —— L3-06 是你的舒适区</li>
+<li><strong>编排引擎</strong>:工作流、状态机、Saga —— 你团队的动作/流程编排已经是雏形</li>
+<li><strong>并发控制直觉</strong>:锁、死锁、乐观并发 —— 这是 CBS 等算法的认知地基</li>
+</ul>
+</div>
+
+<div class="callout warn">
+<span class="callout-title">⚠️ 你真正要补的(核心新东西,集中在这)</span>
+<ul>
+<li><strong>图论基础</strong>:图、最短路、搜索 —— L0-05 + L1(你的算法短板,重点喂)</li>
+<li><strong>路径规划算法</strong>:Dijkstra、A*、RRT —— L1(后端没有对应物,是真新东西)</li>
+<li><strong>多智能体路径查找(MAPF)</strong>:问题形式化、CBS —— L2(后端有类比但远不够,核心新知)</li>
+<li><strong>运动学约束</strong>:底盘/人形关节怎么动、路径为什么不能随便画 —— L1-05 + 人形专题</li>
+<li><strong>实时性 + 物理时间约束</strong>:滚动重规划的"硬截止时间" —— L3-02(后端是软实时的,这里是硬约束)</li>
+<li><strong>人形特有问题</strong>:技能编排的物理恢复、高自由度运动规划、3D 语义地图 —— L4-02</li>
+</ul>
+</div>
+
+<p>看清楚了吗?<strong>真正全新的硬骨头集中在 L1(算法)+ L2(MAPF)+ 人形专题</strong>。其余大量内容你其实是带着经验来"认领"的。这就是为什么我说你是带着优势来学的,不是从零开始。</p>
+
+<h2 id="how-to-use">五、怎么用这张表(学习方法论)</h2>
+
+<ol>
+<li><strong>每学一个新算法,先翻译</strong>:在脑里/笔记里写一句「这玩意儿在后端叫 ___」。如果对应物清晰,学习曲线立降一半。</li>
+<li><strong>翻译后,立刻找差异</strong>:问「这个调度版本,比后端版本多了/少了什么约束?」差异处就是你要重点学的。表里第三列就是干这个的。</li>
+<li><strong>用差异提醒自己别傲慢</strong>:最大的陷阱是"这不就是 XX 吗,我懂"——然后忽略了物理约束、时间约束、不可回滚这些<strong>致命差异</strong>。每个类比都要配一句"但不一样的地方是……"。</li>
+</ol>
+
+<div class="callout">
+<span class="callout-title">📌 一个心法</span>
+<em>后端类比是脚手架,不是建筑本身。</em>用它快速搭起理解,然后要把脚手架拆掉,让调度概念在自己原生的逻辑里站稳。最终目标是<strong>不需要类比也能讲清调度</strong>——那时你才是真懂了。
+</div>
+
+<h2 id="recap">小结</h2>
+
+<ul>
+<li>建立了一张「调度 ↔ 后端」对照表,覆盖 14 个核心概念。<strong>请保存。</strong></li>
+<li>三个深度翻译示范了翻译思路:冲突消解≈4D 锁、死锁≈不可回滚的死锁、人形编排≈物理版 Temporal。</li>
+<li>你的架构演进(集中式→车端规划+审核)对应后端「单体→准入控制→服务网格」,后端已有成熟模式可借鉴。</li>
+<li>盘点清楚:你已会架构/通信/容错/编排/并发直觉;<strong>真正要补的是 L1 算法 + L2 MAPF + 人形专题</strong>。</li>
+</ul>
+
+<div class="section-quiz">
+<strong>✅ 自测(每题答案 4 个字,完全等长)</strong>
+<ol>
+<li>调度里"两台车占用同一路段同一时间段"的冲突,最像后端里占用同一行数据时用的什么机制?</li>
+<li>后端的死锁能靠"杀事务回滚"恢复,调度里车的死锁为什么不能这么干?(用四个字概括原因)</li>
+<li>你团队现在做的"动作编排+流程编排",在后端最像哪一类系统?(四个字)</li>
+<li>你规划的"车端规划+调度审核",在后端里这种"客户端先算、中央校验批准"的模式叫什么?</li>
+</ol>
+<p style="color:var(--muted);font-size:.85rem;margin-top:.8rem;">这 4 题考的是翻译能力。全对说明这张对照表已经内化,你可以放心进入真正的硬骨头区了。下一课 L0-05 是<strong>算法前置</strong>——图、最短路、复杂度,这是 L1 全部内容的地基,我会从最基本讲起,照顾你的算法短板。</p>
+</div>
+
+<div class="section-source">
+<strong>🔗 推荐主源</strong><br>
+本课是综合方法论,没有单一外链。但如果你想看「把分布式系统概念迁移」的经典示范,推荐 Leslie Lamport 的文章风格(他就是把物理/逻辑时间翻译进分布式系统的祖师爷)。可选读:<a href="https://lamport.org/">Lamport 个人主页</a> 的一些随笔,感受"怎么用一个领域的语言讲另一个领域"。
+</div>
+
+<div class="section-ask">
+<strong>❓ 有问题随时问。</strong>特别想确认:这张对照表里,有没有哪个翻译你觉得"不太对"或"对不上你经验"?有的话告诉我,我们校准它——这张表是要陪你走完整门课的,必须准确。
+</div>
+
+<div class="lesson-nav">
+  <a href="0003-l0-03-system-panorama.html">← 上一课:L0-03 全景图</a>
+  <a class="next" href="0005-l0-05-math-primer.html">下一课:L0-05 数学与算法前置 →</a>
+</div>
+
+</body>
+</html>

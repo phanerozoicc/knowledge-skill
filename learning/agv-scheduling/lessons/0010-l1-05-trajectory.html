@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>L1-05 · 运动学与轨迹:路径 ≠ 轨迹</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .try-it {
+    border: 2px dashed var(--accent);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    margin: 1.5rem 0;
+    background: #f7fbfd;
+  }
+  .try-it h4 { margin-top: 0; color: var(--accent); }
+</style>
+</head>
+<body>
+
+<h1>L1-05 · 运动学与轨迹:路径 ≠ 轨迹</h1>
+
+<div class="lesson-meta">
+  <span class="tag">阶段 L1 单机能力</span>
+  <span class="tag">难度:中等(概念)</span>
+  <span class="tag">前置:L1-04, L0-02</span>
+  <span class="tag">预计:45 分钟</span>
+</div>
+
+<div class="section-goal">
+  <strong>🎯 这节课你将学会:</strong>理解为什么 A* 找出来的路径<strong>车开不了</strong>——因为车有<strong>运动学约束</strong>(不能原地直角拐弯、有转弯半径)。你会搞清楚两个常被混淆的概念「路径」vs「轨迹」,以及工业上怎么把 A* 的路径变成车真正能开的轨迹。这课把你 L0-02 学的底盘构型和 L1 的路径规划真正连起来,也是通向人形全身运动规划的关键伏笔。
+</div>
+
+<h2 id="the-shock">一个会让你愣住的事实</h2>
+
+<p>恭喜,你现在会写 A* 了,能在一个图上找到最短路径。比如从入口到货架3:</p>
+
+<figure class="svg-fig">
+<svg viewBox="0 0 520 220" xmlns="http://www.w3.org/2000/svg">
+  <!-- 坐标参考 -->
+  <text x="20" y="30" class="axis-label">y</text>
+  <line x1="25" y1="25" x2="25" y2="190" class="axis"/>
+  <line x1="25" y1="180" x2="500" y2="180" class="axis"/>
+  <text x="495" y="200" class="axis-label">x</text>
+
+  <!-- A* 路径:带直角的折线 -->
+  <polyline points="50,160 150,160 320,160 320,90 460,90"
+            class="path-raw" stroke="#0b6e99" stroke-width="3" fill="none"/>
+
+  <!-- 节点 -->
+  <circle cx="50" cy="160" r="6" class="node-circle"/>
+  <text x="30" y="178" class="node-label" font-size="12">入口</text>
+
+  <circle cx="150" cy="160" r="5" class="node-circle"/>
+  <text x="138" y="178" class="node-label" font-size="11">主道</text>
+
+  <circle cx="320" cy="160" r="5" class="node-circle"/>
+  <text x="300" y="178" class="node-label" font-size="11">岔口B</text>
+
+  <circle cx="320" cy="90" r="5" class="node-circle"/>
+  <text x="298" y="82" class="node-label" font-size="11">货架2</text>
+
+  <circle cx="460" cy="90" r="6" class="node-circle"/>
+  <text x="440" y="82" class="node-label" font-size="12">货架3</text>
+
+  <!-- 标注直角问题 -->
+  <circle cx="320" cy="160" r="18" fill="none" stroke="#b54708" stroke-width="2" stroke-dasharray="3 2"/>
+  <text x="345" y="150" font-size="12" fill="#b54708" font-weight="600">直角!</text>
+</svg>
+<figcaption>A* 找出的最优路径(入口→主道→岔口B→货架2→货架3),岔口B 处是个直角</figcaption>
+</figure>
+
+<p>看起来很完美,对吧?现在问题来了:</p>
+
+<div class="callout warn">
+<span class="callout-title">⚠️ 一台叉车 AGV(阿克曼底盘)根本开不了这条路</span>
+因为在岔口B 那个<strong>直角</strong>,车要原地旋转 90 度。但阿克曼底盘(像汽车)有<strong>转弯半径</strong>,不能原地转——就像你开车不能在一个点上横着挪。车会冲出通道、撞货架。<br><br>
+<strong>A* 找的路径,是数学上的最优,却不是物理上可行的。</strong> 这就是为什么需要这节课。
+</div>
+
+<h2 id="path-vs-trajectory">核心区分:路径 ≠ 轨迹</h2>
+
+<p>这是整个运动规划领域最基础的一对概念,你必须分清:</p>
+
+<table>
+<thead><tr><th></th><th>路径 (Path)</th><th>轨迹 (Trajectory)</th></tr></thead>
+<tbody>
+<tr><td><strong>是什么</strong></td><td>一系列<strong>几何位置</strong>的序列</td><td>路径 + <strong>时间</strong>信息(每个点在何时到达)</td></tr>
+<tr><td><strong>含什么</strong></td><td>"去哪"(x, y)</td><td>"去哪 + <strong>什么时候</strong>到 + 多快"(x, y, t, v)</td></tr>
+<tr><td><strong>考虑运动学吗</strong></td><td>通常不考虑(纯几何)</td><td><strong>必须考虑</strong>(要符合车的物理能力)</td></tr>
+<tr><td><strong>谁产出</strong></td><td>A*/Dijkstra(你的 L1-03/04)</td><td>路径 + 速度规划 + 运动学平滑</td></tr>
+<tr><td><strong>后端类比</strong></td><td>API 调用顺序(逻辑链)</td><td>API 调用 + <strong>时间约束 + 限速</strong></td></tr>
+</tbody>
+</table>
+
+<figure class="svg-fig">
+<svg viewBox="0 0 520 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- 左:路径 -->
+  <text x="110" y="25" text-anchor="middle" font-size="14" font-weight="600" fill="#0b6e99">路径 Path</text>
+  <text x="110" y="42" text-anchor="middle" font-size="11" fill="#595959">只有"去哪"</text>
+  <circle cx="50" cy="150" r="6" class="node-circle"/>
+  <circle cx="110" cy="150" r="5" class="node-circle"/>
+  <circle cx="170" cy="100" r="6" class="node-circle"/>
+  <polyline points="50,150 110,150 170,100" class="path-raw" stroke="#0b6e99" stroke-width="3"/>
+  <text x="40" y="170" font-size="11" fill="#595959">A</text>
+  <text x="170" y="95" font-size="11" fill="#595959">B</text>
+
+  <!-- 分隔 -->
+  <line x1="220" y1="30" x2="220" y2="170" stroke="#d9d9d9"/>
+
+  <!-- 右:轨迹 -->
+  <text x="370" y="25" text-anchor="middle" font-size="14" font-weight="600" fill="#5a8a2a">轨迹 Trajectory</text>
+  <text x="370" y="42" text-anchor="middle" font-size="11" fill="#595959">去哪 + 何时到 + 多快</text>
+  <path d="M 290,150 L 340,150 Q 360,150 360,130 L 360,100 Q 360,80 380,80 L 430,80"
+        class="path-smooth" stroke="#5a8a2a" stroke-width="3" fill="none"/>
+  <circle cx="290" cy="150" r="6" class="node-circle"/>
+  <circle cx="430" cy="80" r="6" class="node-circle"/>
+  <!-- 时间标记 -->
+  <text x="280" y="170" font-size="10" fill="#8a5a2a">t=0s</text>
+  <text x="345" y="170" font-size="10" fill="#8a5a2a">t=2s</text>
+  <text x="420" y="100" font-size="10" fill="#8a5a2a">t=4s</text>
+  <!-- 速度箭头 -->
+  <text x="380" y="135" font-size="10" fill="#b54708">v=1.2m/s</text>
+</svg>
+<figcaption>左:路径只有几何位置;右:轨迹加了时间(t)和速度(v),且拐弯被平滑</figcaption>
+</figure>
+
+<div class="backend-analogy">
+路径 vs 轨迹,就像:
+<ul>
+<li><strong>路径</strong>:你的服务调用链 = "订单服务→支付服务→库存服务"(只有逻辑顺序,没时间)</li>
+<li><strong>轨迹</strong>:加上"支付必须在 3 秒内返回、库存查询限 100 QPS"——<strong>时间约束 + 能力约束</strong></li>
+</ul>
+A* 给你的是"调用链"(路径),但车要的是"带时间和限速的执行计划"(轨迹)。中间差一道工序。
+</div>
+
+<h2 id="kinematics">为什么车开不了直角:运动学约束</h2>
+
+<p>L0-02 你学过三种底盘构型。现在我们要把它们的<strong>运动学约束</strong>讲清楚——这直接决定了"路径能不能有直角"。</p>
+
+<h3>构型 1:差速驱动(Differential Drive)</h3>
+
+<p>两个轮子靠转速差转向。<strong>能原地旋转</strong>(一个轮正转、一个反转)。路径<strong>可以有直角</strong>。</p>
+
+<figure class="svg-fig">
+<svg viewBox="0 0 360 180" xmlns="http://www.w3.org/2000/svg">
+  <!-- 原地旋转示意 -->
+  <text x="100" y="30" text-anchor="middle" font-size="12" font-weight="600" fill="#0b6e99">原地转 90°</text>
+  <!-- 旋转前朝向(右) -->
+  <rect x="80" y="95" width="40" height="30" rx="4" class="robot" opacity="0.35"/>
+  <line x1="120" y1="110" x2="140" y2="110" stroke="#0b6e99" stroke-width="2" opacity="0.4"/>
+  <!-- 旋转后朝向(上) -->
+  <rect x="80" y="95" width="40" height="30" rx="4" class="robot"/>
+  <line x1="100" y1="95" x2="100" y2="72" class="heading"/>
+  <text x="145" y="114" font-size="10" fill="#595959">之前朝东</text>
+  <text x="108" y="68" font-size="10" fill="#0b6e99">现在朝北</text>
+  <text x="78" y="150" font-size="10" fill="#5a8a2a">位置不变,只改朝向</text>
+
+  <line x1="200" y1="30" x2="200" y2="160" stroke="#d9d9d9"/>
+
+  <!-- 路径可以有直角 -->
+  <text x="290" y="30" text-anchor="middle" font-size="12" font-weight="600" fill="#0b6e99">路径可以带直角</text>
+  <polyline points="230,130 290,130 290,70" class="path-smooth" stroke="#0b6e99" stroke-width="3"/>
+  <circle cx="290" cy="130" r="5" class="node-circle"/>
+  <text x="272" y="148" font-size="10" fill="#5a8a2a">✓ 直角 OK</text>
+</svg>
+<figcaption>差速车:两轮转速差转向,能原地旋转 → 路径可以有直角</figcaption>
+</figure>
+
+<h3>构型 2:阿克曼(Ackermann,像汽车)</h3>
+
+<p>前轮转向,像汽车。<strong>不能原地转</strong>,有<strong>最小转弯半径 R</strong>。路径<strong>不能有直角</strong>,必须是平滑圆弧。</p>
+
+<figure class="svg-fig">
+<svg viewBox="0 0 420 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- 直角不可行 -->
+  <text x="100" y="25" text-anchor="middle" font-size="12" font-weight="600" fill="#b54708">✗ 直角开不了</text>
+  <polyline points="40,150 90,150 90,80" stroke="#bbb" stroke-width="3" stroke-dasharray="5 3" fill="none"/>
+  <circle cx="90" cy="150" r="5" class="node-circle"/>
+  <text x="70" y="170" font-size="10" fill="#b54708">车会冲出去</text>
+  <!-- 禁止圈 -->
+  <circle cx="90" cy="120" r="22" fill="none" stroke="#b54708" stroke-width="1.5"/>
+  <line x1="74" y1="104" x2="106" y2="136" stroke="#b54708" stroke-width="1.5"/>
+
+  <line x1="200" y1="30" x2="200" y2="180" stroke="#d9d9d9"/>
+
+  <!-- 必须走圆弧 -->
+  <text x="310" y="25" text-anchor="middle" font-size="12" font-weight="600" fill="#0b6e99">✓ 必须走圆弧</text>
+  <!-- 圆弧路径 -->
+  <path d="M 230,150 L 260,150 A 30 30 0 0 0 290 120 L 290,90" class="path-smooth" stroke="#0b6e99" stroke-width="3" fill="none"/>
+  <!-- 转弯半径标注 -->
+  <circle cx="260" cy="120" r="30" fill="none" stroke="#8a5a2a" stroke-width="1" stroke-dasharray="3 2"/>
+  <line x1="260" y1="120" x2="260" y2="150" stroke="#8a5a2a" stroke-width="1" stroke-dasharray="2 2"/>
+  <text x="268" y="140" font-size="11" fill="#8a5a2a" font-weight="600">R</text>
+  <text x="248" y="112" font-size="9" fill="#8a5a2a">转弯半径</text>
+  <circle cx="230" cy="150" r="5" class="node-circle"/>
+</svg>
+<figcaption>阿克曼:有最小转弯半径 R,不能原地转 → 路径必须用平滑圆弧</figcaption>
+</figure>
+
+<h3>构型 3:全向(Omni,麦克纳姆轮/舵轮)</h3>
+
+<p>能横着走、斜着走,极致灵活。路径几乎任意,代价是轮子贵、载重有限。</p>
+
+<figure class="svg-fig">
+<svg viewBox="0 0 360 140" xmlns="http://www.w3.org/2000/svg">
+  <text x="180" y="25" text-anchor="middle" font-size="12" font-weight="600" fill="#0b6e99">全向:任意方向移动</text>
+  <!-- 中心车 -->
+  <rect x="155" y="60" width="50" height="35" rx="5" class="robot"/>
+  <text x="180" y="82" text-anchor="middle" font-size="9" fill="#fff" font-weight="600">OMNI</text>
+  <!-- 八方向箭头 -->
+  <g stroke="#0b6e99" stroke-width="2" fill="#0b6e99">
+    <line x1="180" y1="60" x2="180" y2="40" marker-end="url(#arr)"/>
+    <line x1="180" y1="95" x2="180" y2="115" marker-end="url(#arr)"/>
+    <line x1="155" y1="77" x2="125" y2="77" marker-end="url(#arr)"/>
+    <line x1="205" y1="77" x2="235" y2="77" marker-end="url(#arr)"/>
+    <line x1="160" y1="65" x2="140" y2="50" marker-end="url(#arr)"/>
+    <line x1="200" y1="65" x2="220" y2="50" marker-end="url(#arr)"/>
+    <line x1="160" y1="90" x2="140" y2="105" marker-end="url(#arr)"/>
+    <line x1="200" y1="90" x2="220" y2="105" marker-end="url(#arr)"/>
+  </g>
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#0b6e99"/>
+    </marker>
+  </defs>
+  <text x="100" y="130" font-size="10" fill="#5a8a2a">↑↓←→ 和四个斜向,都能直接走</text>
+</svg>
+<figcaption>全向车(麦克纳姆/舵轮):几乎无运动学约束,路径最灵活</figcaption>
+</figure>
+
+<h2 id="fix">怎么修:从路径到可执行轨迹</h2>
+
+<p>工业上的标准做法是<strong>两步走</strong>:A* 找粗路径,再用运动学曲线把它"圆滑"成车能开的轨迹。下面这张图是核心——把刚才那条带直角的路径,用 Dubins 曲线平滑:</p>
+
+<figure class="svg-fig">
+<svg viewBox="0 0 520 240" xmlns="http://www.w3.org/2000/svg">
+  <text x="260" y="25" text-anchor="middle" font-size="13" font-weight="600" fill="#0b6e99">A* 粗路径(虚线)→ Dubins 平滑后(实线)</text>
+
+  <!-- 网格背景 -->
+  <g stroke="#ececec" stroke-width="0.5">
+    <line x1="40" y1="200" x2="480" y2="200"/>
+    <line x1="40" y1="160" x2="480" y2="160"/>
+    <line x1="40" y1="120" x2="480" y2="120"/>
+    <line x1="40" y1="80" x2="480" y2="80"/>
+  </g>
+
+  <!-- A* 粗路径(带直角的折线,虚线) -->
+  <polyline points="60,200 180,200 320,200 320,100 440,100"
+            class="path-raw" stroke="#bbb" stroke-width="2.5" stroke-dasharray="6 4" fill="none"/>
+  <text x="200" y="215" font-size="10" fill="#999">A* 粗路径(带直角)</text>
+
+  <!-- Dubins 平滑(圆弧+直线,实线) -->
+  <path d="M 60,200 L 290,200 A 30 30 0 0 0 320 170 L 320,130 A 30 30 0 0 1 350 100 L 440,100"
+        class="path-smooth" stroke="#0b6e99" stroke-width="3" fill="none"/>
+  <text x="250" y="190" font-size="10" fill="#0b6e99" font-weight="600">Dubins 平滑(圆弧)</text>
+
+  <!-- 节点 -->
+  <circle cx="60" cy="200" r="6" class="node-circle"/>
+  <text x="42" y="218" class="node-label" font-size="12">入口</text>
+  <circle cx="320" cy="200" r="5" class="node-circle"/>
+  <text x="298" y="222" class="node-label" font-size="11">岔口B</text>
+  <circle cx="320" cy="100" r="5" class="node-circle"/>
+  <text x="296" y="92" class="node-label" font-size="11">货架2</text>
+  <circle cx="440" cy="100" r="6" class="node-circle"/>
+  <text x="420" y="92" class="node-label" font-size="12">货架3</text>
+
+  <!-- 转弯半径示意 -->
+  <circle cx="290" cy="200" r="30" fill="none" stroke="#8a5a2a" stroke-width="0.8" stroke-dasharray="2 2"/>
+  <text x="268" y="195" font-size="9" fill="#8a5a2a">圆弧=R</text>
+</svg>
+<figcaption>Dubins 曲线把直角替换为符合最小转弯半径 R 的圆弧,车就能开了</figcaption>
+</figure>
+
+<h3>三个原子动作:所有曲线的乐高积木</h3>
+
+<p>在讲三种曲线之前,先记住这个基础——任何受转弯半径约束的路径,都能拆成 <strong>3 种原子动作</strong>的拼接:</p>
+
+<table>
+<thead><tr><th>代号</th><th>动作</th><th>几何</th></tr></thead>
+<tbody>
+<tr><td><strong>S</strong></td><td>Straight</td><td>直线</td></tr>
+<tr><td><strong>L</strong></td><td>Left</td><td>左转圆弧(半径=R)</td></tr>
+<tr><td><strong>R</strong></td><td>Right</td><td>右转圆弧(半径=R)</td></tr>
+</tbody>
+</table>
+
+<p>记住 L/S/R 这三个字母——后面所有曲线,本质都是它们的组合。</p>
+
+<h3>三种曲线:本质区别在"车的能力"</h3>
+
+<table>
+<thead><tr><th></th><th>Dubins</th><th>Reeds-Shepp</th><th>Spline</th></tr></thead>
+<tbody>
+<tr><td><strong>车能力</strong></td><td>只前进</td><td>前进+<strong>倒车</strong></td><td>任意(差速/全向)</td></tr>
+<tr><td><strong>运动学严格?</strong></td><td>✅ 保证 R</td><td>✅ 保证 R</td><td>❌ 不保证</td></tr>
+<tr><td><strong>本质</strong></td><td>6 种 L/S/R 三段组合取最短</td><td>Dubins + 倒车,组合变 ~48 种</td><td>数学平滑(贝塞尔/B样条),不绑运动学</td></tr>
+<tr><td><strong>典型用户</strong></td><td>扫地车/部分 AGV</td><td><strong>叉车 AGV</strong>(要对位)</td><td>差速/全向 AMR</td></tr>
+</tbody>
+</table>
+
+<p><strong>Dubins 的实质</strong>(不是名字,是定理):Dubins 证明了,在最小转弯半径 R 约束下,从起点到终点的最短可行路径<strong>一定是 6 种组合之一</strong>——LSL、LSR、RSL、RSR、LRL、RLR(每种是 3 段 L/S/R 拼成)。所以 Dubins 不是神奇算法,是"有限种拼法取最短"。</p>
+
+<p><strong>Reeds-Shepp 的实质</strong>:同样思路,但因为允许倒车,每个动作有了方向(前进 L⁺/倒车 L⁻),组合从 6 种膨胀到约 48 种。叉车 AGV 用它——因为对位货架时经常要"前进-倒车-前进"微调,纯 Dubins 做不到。</p>
+
+<p><strong>Spline 的实质</strong>:和前两个不同——它是<strong>数学平滑工具</strong>(让曲线好看好走),<strong>不保证严格满足转弯半径 R</strong>。适合差速/全向车(它们本来就没严格 R 约束),或不在意严格的场景。</p>
+
+<p><strong>选择口诀</strong>:阿克曼只前进 → Dubins;阿克曼要倒车 → Reeds-Shepp;差速/全向 → Spline。</p>
+
+<div class="callout">
+<span class="callout-title">📌 这块和调度的关系(你真正该记住的)</span>
+<ol>
+<li><strong>调度层(拓扑)通常不管这些曲线</strong>——它产出节点序列,平滑在<strong>车载/局部规划器层</strong>。L3-03 的 VDA5050 协议就是证据:调度只下发节点/边序列,车辆自己决定怎么开过去。</li>
+<li><strong>但"路径 ≠ 轨迹"必须懂</strong>——否则你会设计出车开不了的调度方案。</li>
+<li><strong>做人形时,这一层会变成中央的核心</strong>——因为人形的"曲线"是几十个关节的全身运动规划,不能委托给车端。这就是 L4-02 的内容。</li>
+</ol>
+所以:做调度器,曲线是"知道概念";做人形调度,曲线是"核心能力"。完整细节见 <a href="../reference/curves.html">运动学曲线速查</a>。
+</div>
+
+<div class="callout">
+<span class="callout-title">📌 工业标准流水线</span>
+<ol>
+<li>A*(拓扑图)→ 得到节点序列(粗路径)</li>
+<li>把节点序列转成几何折线(带坐标的路径)</li>
+<li><strong>用 Dubins/Reeds-Shepp/Spline 平滑</strong> → 得到运动学可行的轨迹(通常在车载层)</li>
+<li>加时间信息(速度规划)→ 最终可执行轨迹</li>
+</ol>
+你现在会的是第 1~2 步(A*),第 3~4 步是本课引入的概念。完整的单车规划 = A* + 平滑 + 速度规划。
+</div>
+
+<h2 id="humanoid">人形伏笔(本课重点)</h2>
+
+<div class="backend-analogy">
+这课对人形特别重要,因为人形的运动学约束<strong>复杂到另一个量级</strong>:
+<ul>
+<li><strong>AGV</strong>:运动学约束 = "转弯半径"(1~2 个参数)。Dubins 曲线搞定。</li>
+<li><strong>人形</strong>:运动学约束 = <strong>几十个关节的角度限制、速度限制、力矩限制、平衡约束</strong>。不能简单用一条曲线平滑。</li>
+</ul>
+所以人形的"从路径到轨迹"这一步,变成了一个专门的难题——<strong>全身运动规划(Whole-Body Motion Planning)</strong>。工具也从 Dubins/Spline 升级为:
+<ul>
+<li>逆运动学(IK):算出"手要到这个位置,各关节该怎么弯"</li>
+<li>轨迹优化:把"平滑+不撞+平衡+省力"一起优化</li>
+<li>RRT/L1-06:在高维关节空间里搜索</li>
+</ul>
+<strong>但核心思想不变</strong>:仍然是"路径(几何)→ 轨迹(满足约束的执行序列)"这个两段式框架。你学的"路径 ≠ 轨迹"的区分,在人形里完全适用,只是约束从"转弯半径"升级成了"全身关节"。这是 L4-02 人形调度的物理基础。
+</div>
+
+<h2 id="recap">小结</h2>
+
+<ul>
+<li><strong>路径 ≠ 轨迹</strong>:路径是几何位置序列,轨迹是加了时间/速度/运动学约束的执行计划。</li>
+<li>A* 给的是路径(数学最优),但<strong>车可能开不了</strong>——因为有运动学约束。</li>
+<li>底盘构型决定约束:差速(能原地转)、阿克曼(有转弯半径)、全向(几乎无约束)。</li>
+<li>工业流水线:A* → 几何折线 → <strong>Dubins/Reeds-Shepp/Spline 平滑</strong> → 加时间 → 可执行轨迹。</li>
+<li>人形把这一步放大:运动学约束从"转弯半径"升级为"几十个关节",催生全身运动规划。但框架不变。</li>
+</ul>
+
+<div class="try-it">
+<h4>🔧 纸上思考练习(不用跑代码,几分钟搞定)</h4>
+<p>判断下面三种情况,A* 找出的路径需不需要运动学平滑?</p>
+<ol>
+<li>一辆<strong>差速 AGV</strong>,在栅格地图上,A* 给出一条带直角的路径。<strong>需要平滑吗?</strong></li>
+<li>一辆<strong>叉车 AGV(阿克曼)</strong>,同样一条带直角的路径。<strong>需要平滑吗?</strong></li>
+<li>一辆<strong>全向 AGV(麦克纳姆)</strong>,同样这条路径。<strong>需要平滑吗?</strong></li>
+</ol>
+<p style="color:var(--muted);font-size:.9rem;">这题考的是你对"运动学约束"的理解,不用写代码。把你的判断和理由发我。</p>
+</div>
+
+<div class="section-quiz">
+<strong>✅ 自测(每题答案 4 个字,完全等长)</strong>
+<ol>
+<li>路径加上"时间信息和运动学约束"之后,叫什么?</li>
+<li>阿克曼底盘不能原地转,它有什么样的转向限制?</li>
+<li>把带直角的路径用平滑曲线改造成车能开的轨迹,最常用的曲线叫什么?</li>
+<li>能原地旋转(两轮转速差转向)、路径可以有直角的底盘,叫什么驱动?</li>
+</ol>
+</div>
+
+<div class="section-source">
+<strong>🔗 推荐主源</strong><br>
+<a href="https://www.redblobgames.com/pathfinding/a-star/introduction.html">Red Blob Games</a> 的路径部分简单提了平滑。更深入可搜 <em>"Dubins curve visualization"</em> 看动画。对运动学感兴趣的话,<em>"Wheeled Mobile Robotics"</em> 教材(L0 资源清单里有)是权威。
+</div>
+
+<div class="section-ask">
+<strong>❓ 有问题随时问。</strong>既然你在做人形,我想问你:<strong>你们人形的运动规划,现在是中央算好轨迹下发,还是机器人自己规划?</strong>这个答案直接关系到 L3-01/L4-02 怎么对接你的实际架构。另外别忘了 L1-03/04 的代码练习还欠着,有空时记得跑一下。
+</div>
+
+<div class="lesson-nav">
+  <a href="0009-l1-04-astar.html">← 上一课:L1-04 A*</a>
+  <a class="next" href="0011-l1-06-rrt.html">下一课:L1-06 RRT 与采样规划 →</a>
+</div>
+
+</body>
+</html>

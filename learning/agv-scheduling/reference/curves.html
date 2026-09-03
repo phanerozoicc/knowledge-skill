@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>运动学曲线速查:从路径到可执行轨迹</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .pick-box {
+    border: 2px solid var(--accent);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    margin: 1.5rem 0;
+    background: #f7fbfd;
+  }
+  .pick-box h3 { margin-top: 0; color: var(--accent); }
+</style>
+</head>
+<body>
+
+<h1>运动学曲线速查:从路径到可执行轨迹</h1>
+
+<div class="lesson-meta">
+  <span class="tag">参考文档</span>
+  <span class="tag">L1-05 配套</span>
+  <span class="tag">人形核心(L4-02)</span>
+</div>
+
+<div class="callout">
+<strong>一句话定位:</strong>A* 给的是带直角的折线(数学最优但车开不了);运动学曲线负责把直角替换成<strong>车物理上能执行的形状</strong>,代价是绕一点点路。
+</div>
+
+<h2>为什么需要这些曲线(根本问题)</h2>
+
+<p>车不是质点,它有<strong>运动学约束</strong>:</p>
+<ul>
+<li>阿克曼车(像汽车):有<strong>最小转弯半径 R</strong>,不能原地转,不能横移</li>
+<li>差速车:能原地转,但转弯仍有最小半径(两轮不能转太快)</li>
+</ul>
+
+<p>所以问题是:<strong>给定起点(位置+朝向)和终点(位置+朝向),在转弯半径约束下,最短的可执行路径是什么?</strong> 这三个曲线就是对这个问题不同的回答,区别在<strong>车的能力</strong>和<strong>解法</strong>。</p>
+
+<h2>三个原子动作:所有曲线的乐高积木</h2>
+
+<p>在讲三种曲线之前,先记住这个基础——任何受转弯半径约束的路径,都能拆成 <strong>3 种原子动作</strong>的拼接:</p>
+
+<table>
+<thead><tr><th>代号</th><th>动作</th><th>几何</th></tr></thead>
+<tbody>
+<tr><td><strong>S</strong></td><td>Straight</td><td>直线</td></tr>
+<tr><td><strong>L</strong></td><td>Left</td><td>左转圆弧(半径=R)</td></tr>
+<tr><td><strong>R</strong></td><td>Right</td><td>右转圆弧(半径=R)</td></tr>
+</tbody>
+</table>
+
+<p>记住 L / S / R 这三个字母——后面所有曲线,本质都是它们的组合。</p>
+
+<h2>曲线 1:Dubins 曲线(只能前进)</h2>
+
+<p><strong>适用</strong>:阿克曼车,<strong>只能前进,不能倒车</strong>(如扫地车、部分 AGV)。</p>
+
+<p><strong>核心结论(Dubins 定理)</strong>:在最小转弯半径 R 约束下,从起点到终点的最短可行路径,<strong>一定是 6 种组合之一</strong>,每种由 3 段拼成:</p>
+
+<pre><code>6 种组合:
+  LSL   左转-直行-左转
+  LSR   左转-直行-右转
+  RSL   右转-直行-左转
+  RSR   右转-直行-右转
+  LRL   左转-右转-左转(三段全是圆弧,无直行)
+  RLR   右转-左转-右转(三段全是圆弧,无直行)</code></pre>
+
+<p><strong>怎么用</strong>:对给定的起终点,把 6 种都算出来,取<strong>总长度最短</strong>的那条。就这么简单——不是"神奇算法",是"有限种拼法取最优"。</p>
+
+<div class="callout">
+<strong>记忆点:</strong>Dubins = 6 种 L/S/R 三段组合取最短,只能前进。
+</div>
+
+<h2>曲线 2:Reeds-Shepp 曲线(可前进可倒车)</h2>
+
+<p><strong>适用</strong>:阿克曼车,<strong>能前进也能倒车</strong>(如叉车 AGV,经常要调整对位)。</p>
+
+<p><strong>核心升级</strong>:引入带方向的动作——</p>
+<ul>
+<li>L⁺ R⁺ S⁺ = 前进时左转/右转/直行</li>
+<li>L⁻ R⁻ S⁻ = <strong>倒车时</strong>左转/右转/直行</li>
+</ul>
+
+<p>因为多了"倒车"这个维度,组合数从 6 种膨胀到 <strong>48 种</strong>左右(具体数取决于定义)。</p>
+
+<p><strong>怎么用</strong>:同样,把所有可行组合算出来,取最短。</p>
+
+<div class="callout">
+<strong>记忆点:</strong>Reeds-Shepp = Dubins + 允许倒车,组合从 6 种变成约 48 种。叉车 AGV 用它。<br>
+<strong>为什么叉车需要它:</strong>叉车对位货架时,经常要"前进-倒车-前进"地微调,纯 Dubins 做不到。
+</div>
+
+<h2>曲线 3:Spline / 样条曲线(通用平滑,不绑运动学)</h2>
+
+<p><strong>适用</strong>:差速车、全向车,或<strong>不需要严格满足转弯半径</strong>的场景。</p>
+
+<p><strong>与前两个的本质区别</strong>:Dubins/Reeds-Shepp 是<strong>严格运动学最优</strong>(数学上保证最短且可执行);Spline 是<strong>数学平滑</strong>(让曲线好看好走,但不保证严格满足 R)。</p>
+
+<p><strong>常用类型</strong>:</p>
+<ul>
+<li><strong>贝塞尔曲线(Bezier)</strong>:用控制点拉出平滑曲线,直观</li>
+<li><strong>B 样条(B-spline)</strong>:更可控,局部改动不影响全局</li>
+<li><strong>三次样条</strong>:最常用,保证一阶/二阶导数连续(速度/加速度平滑)</li>
+</ul>
+
+<div class="callout">
+<strong>记忆点:</strong>Spline = 数学平滑工具,不保证运动学严格,适合差速/全向车。当你不需要严格转弯半径约束时,用它最省事。
+</div>
+
+<h2>三者对比(一图记住)</h2>
+
+<table>
+<thead><tr><th></th><th>Dubins</th><th>Reeds-Shepp</th><th>Spline</th></tr></thead>
+<tbody>
+<tr><td><strong>车能力</strong></td><td>只前进</td><td>前进+倒车</td><td>任意(差速/全向)</td></tr>
+<tr><td><strong>运动学严格?</strong></td><td>✅ 保证 R</td><td>✅ 保证 R</td><td>❌ 不保证</td></tr>
+<tr><td><strong>最优性</strong></td><td>最短(给定约束)</td><td>最短(给定约束)</td><td>平滑,但不一定最短</td></tr>
+<tr><td><strong>组合数</strong></td><td>6 种</td><td>~48 种</td><td>无限(连续参数)</td></tr>
+<tr><td><strong>典型用户</strong></td><td>扫地车/部分 AGV</td><td><strong>叉车 AGV</strong></td><td>差速/全向 AMR</td></tr>
+</tbody>
+</table>
+
+<div class="pick-box">
+<h3>选择口诀</h3>
+<ul>
+<li>阿克曼且只前进 → <strong>Dubins</strong></li>
+<li>阿克曼且要倒车(叉车)→ <strong>Reeds-Shepp</strong></li>
+<li>差速/全向,或不在意严格 R → <strong>Spline</strong></li>
+</ul>
+</div>
+
+<h2>这块和调度的关系(精确版,务必分清)</h2>
+
+<div class="callout warn">
+<strong>⚠️ 重要纠正:</strong>"轨迹"这个词有歧义,必须分清两种:
+<ul>
+<li><strong>调度器轨迹(时空)</strong>:路径 + <strong>时间窗</strong>。调度器<strong>必须持有</strong>——它是冲突检测和空间锁闭(预留表)的基础。L2 的核心。</li>
+<li><strong>可执行轨迹(运动学)</strong>:平滑连续曲率 + 速度曲线。通常在<strong>车载/局部规划器层</strong>。</li>
+</ul>
+</div>
+
+<ol>
+<li><strong>调度层必须管"时空轨迹"</strong>——它要算出每台车<strong>何时</strong>占用<strong>哪段路</strong>,形成预留表 <code>(空间, 时间段) → 车辆</code>,用于冲突检测和空间锁闭。这就是 L2-02、L2-04 的全部基础。后端映射:这是加了时间维的行锁。</li>
+<li><strong>调度层通常不管"运动学平滑轨迹"</strong>(Dubins/RS/Spline 那种)——那是车载/局部规划器的职责。L3-03 的 VDA5050 协议:调度下发节点/边序列+时间,车辆自己决定怎么平滑地开过去。</li>
+<li><strong>两者的耦合点</strong>:调度器算时间窗用的"速度模型"是简化的,不能太离谱(否则锁闭不可靠);车载的运动学是精确的。不要求完全一致,但要能对得上。</li>
+<li><strong>做人形时,运动学轨迹也会变成中央的核心</strong>——因为人形的全身运动规划不能委托给车端(L4-02)。</li>
+</ol>
+
+<div class="callout warn">
+<strong>通向人形(L4-02 伏笔):</strong>AGV 的运动学约束 = 转弯半径(1~2 个参数)→ Dubins/Reeds-Shepp 这种"有限组合取最优"能搞定。人形的运动学约束 = 几十个关节的角度/速度/力矩/平衡限制 → 组合空间爆炸,不能用"枚举 6 种/48 种"的思路。工具变成:
+<ul>
+<li><strong>逆运动学(IK)</strong>:"手要到这个位置,各关节该怎么弯"</li>
+<li><strong>轨迹优化</strong>:把"平滑+不撞+平衡+省力"作为目标函数一起优化</li>
+<li><strong>RRT(L1-06)</strong>:在高维关节空间里采样搜索</li>
+</ul>
+但思想不变:<strong>路径(几何)→ 轨迹(满足约束的执行序列)</strong>这个两段式框架,从 AGV 到人形一脉相承。
+</div>
+
+</body>
+</html>

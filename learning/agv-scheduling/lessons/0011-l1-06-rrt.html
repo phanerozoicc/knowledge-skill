@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>L1-06 · RRT 与采样规划(进阶)</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .try-it {
+    border: 2px dashed var(--accent);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    margin: 1.5rem 0;
+    background: #f7fbfd;
+  }
+  .try-it h4 { margin-top: 0; color: var(--accent); }
+</style>
+</head>
+<body>
+
+<h1>L1-06 · RRT 与采样规划(进阶)</h1>
+
+<div class="lesson-meta">
+  <span class="tag">阶段 L1 单机能力 · 收尾</span>
+  <span class="tag">难度:进阶</span>
+  <span class="tag">前置:L1-04(A*), L1-05</span>
+  <span class="tag">预计:50 分钟</span>
+  <span class="tag">⭐ 人形关键</span>
+</div>
+
+<div class="section-goal">
+  <strong>🎯 这节课你将学会:</strong>理解<strong>什么时候 A* 会失效</strong>,以及为什么需要换一种完全不同的思路——<strong>采样规划</strong>。你会掌握 RRT 的核心思想(随机撒点 + 向点生长),并理解它为什么是人形/机械臂这种<strong>高自由度</strong>机器人的主力规划工具。这课是 L1 的收尾,也是直接通向 L4-02 人形全身运动规划的桥梁。
+</div>
+
+<h2 id="when-astar-fails">先问:A* 不是挺好吗,为什么还要别的?</h2>
+
+<p>L1-03、L1-04 你已经掌握:Dijkstra、A* 都是工业标配。那为什么还需要 RRT?答案在一个词:<strong>维度灾难(Curse of Dimensionality)</strong>。</p>
+
+<h3>回顾:A* 工作在什么上</h3>
+
+<p>A* 工作在<strong>图</strong>上——节点是离散的、数量有限的。我们的实验台地图 7 个节点,A* 秒解。即使是栅格地图,一个仓库也就几万个格子,A* 也能跑。</p>
+
+<p>关键问题:<strong>格子数 = 维度的指数</strong>。维度越多,格子数爆炸。</p>
+
+<h3>维度灾难:一个让你后背发凉的算术</h3>
+
+<table>
+<thead><tr><th>场景</th><th>"状态"是什么</th><th>维度</th><th>格子数(每维 10 档)</th></tr></thead>
+<tbody>
+<tr><td>2D 仓库 AGV</td><td>(x, y)</td><td>2 维</td><td>10² = 100</td></tr>
+<tr><td>带朝向的 AGV</td><td>(x, y, θ)</td><td>3 维</td><td>10³ = 1,000</td></tr>
+<tr><td>6 轴机械臂</td><td>6 个关节角</td><td>6 维</td><td>10⁶ = 1,000,000</td></tr>
+<tr><td>7 自由度机械臂</td><td>7 个关节角</td><td>7 维</td><td>10⁷ = 10,000,000</td></tr>
+<tr><td><strong>人形(全身)</strong></td><td>几十个关节</td><td><strong>30+ 维</strong></td><td><strong>10³⁰ ≈ 宇宙原子数</strong></td></tr>
+</tbody>
+</table>
+
+<div class="callout warn">
+<span class="callout-title">⚠️ 这就是 A* 失效的地方</span>
+A* 要把空间切成格子搜索。但在 30 维空间里,格子数比宇宙原子还多——<strong>你永远切不完、搜不完</strong>。这不是"算法慢一点",是"根本不可能"。A*/Dijkstra 这类<strong>基于网格的搜索</strong>,在高维空间里彻底失效。<br><br>
+这就是为什么需要一种<strong>不依赖网格</strong>的全新思路。
+</div>
+
+<div class="backend-analogy">
+维度灾难在后端你其实见过类似的:<strong>组合爆炸</strong>。比如权限系统,3 个角色 × 4 个资源 × 5 个动作 = 60 种组合,还能枚举;但如果是"为每个用户、每个资源、每个时间窗、每个 IP 段配置规则",维度一多,规则空间立刻爆炸,你只能用 RBAC/ABAC 这种<strong>不枚举、按需求值</strong>的方式。RRT 之于路径规划,就像 ABAC 之于权限:<strong>不穷举空间,而是按需采样</strong>。
+</div>
+
+<h2 id="rrt-idea">RRT 的核心思想:不搜格子,撒点</h2>
+
+<p><strong>RRT(Rapidly-exploring Random Tree,快速探索随机树)</strong>的核心思想一句话:</p>
+
+<blockquote>
+<p><strong>不要把整个空间切成格子慢慢搜;改成在空间里随机撒点,每撒一个点,就从已有的树上往它伸一小段。</strong> 撒得多了,树就铺满了空间,总有一天会碰到目标。</p>
+</blockquote>
+
+<figure class="svg-fig">
+<svg viewBox="0 0 460 260" xmlns="http://www.w3.org/2000/svg">
+  <text x="230" y="22" text-anchor="middle" font-size="13" font-weight="600" fill="#0b6e99">RRT 怎么生长(示意)</text>
+  <!-- 障碍 -->
+  <rect x="180" y="90" width="70" height="80" fill="#d9d9d9" stroke="#999"/>
+  <text x="215" y="135" text-anchor="middle" font-size="10" fill="#666">障碍</text>
+
+  <!-- 树(逐步生长的分支) -->
+  <g stroke="#0b6e99" stroke-width="2" fill="none">
+    <line x1="60" y1="210" x2="90" y2="180"/>
+    <line x1="90" y1="180" x2="120" y2="150"/>
+    <line x1="90" y1="180" x2="100" y2="140"/>
+    <line x1="120" y1="150" x2="140" y2="120"/>
+    <line x1="120" y1="150" x2="155" y2="170"/>
+    <line x1="100" y1="140" x2="80" y2="115"/>
+    <line x1="140" y1="120" x2="170" y2="100"/>
+    <line x1="140" y1="120" x2="150" y2="90"/>
+    <line x1="155" y1="170" x2="130" y2="200"/>
+    <line x1="170" y1="100" x2="180" y2="60"/>
+  </g>
+  <!-- 树节点 -->
+  <g fill="#0b6e99">
+    <circle cx="90" cy="180" r="3"/><circle cx="120" cy="150" r="3"/>
+    <circle cx="100" cy="140" r="3"/><circle cx="140" cy="120" r="3"/>
+    <circle cx="155" cy="170" r="3"/><circle cx="80" cy="115" r="3"/>
+    <circle cx="170" cy="100" r="3"/><circle cx="150" cy="90" r="3"/>
+    <circle cx="130" cy="200" r="3"/><circle cx="180" cy="60" r="3"/>
+  </g>
+  <!-- 起点 -->
+  <circle cx="60" cy="210" r="7" fill="#5a8a2a" stroke="#fff" stroke-width="1.5"/>
+  <text x="45" y="228" font-size="11" fill="#5a8a2a" font-weight="600">起点</text>
+
+  <!-- 随机采样点(虚线) -->
+  <g fill="#bbb">
+    <circle cx="250" cy="200" r="2.5"/>
+    <circle cx="300" cy="170" r="2.5"/>
+    <circle cx="340" cy="220" r="2.5"/>
+    <circle cx="370" cy="120" r="2.5"/>
+    <circle cx="280" cy="80" r="2.5"/>
+  </g>
+  <text x="380" y="200" font-size="10" fill="#bbb">随机采样点</text>
+
+  <!-- 目标 -->
+  <circle cx="410" cy="80" r="8" fill="#fef3e2" stroke="#b54708" stroke-width="2"/>
+  <text x="398" y="60" font-size="11" fill="#b54708" font-weight="600">目标</text>
+</svg>
+<figcaption>RRT 从起点向外随机生长,绕过障碍,逐步铺满空间,直到接近目标</figcaption>
+</figure>
+
+<h2 id="rrt-steps">RRT 的四步循环</h2>
+
+<p>RRT 的算法极其简单,就是一个循环,每次四步:</p>
+
+<pre><code>def rrt(start, goal, space, step_size, max_iter):
+    tree = [start]                        # 树,初始只有起点
+    for i in range(max_iter):
+        # 第1步:在空间里随机撒一个点 q_rand
+        q_rand = random_sample(space)
+
+        # 第2步:在树里找离 q_rand 最近的节点 q_near
+        q_near = nearest(tree, q_rand)
+
+        # 第3步:从 q_near 朝 q_rand 方向,走一小段 step_size,得到 q_new
+        #        (中途若撞障碍,丢弃这次)
+        q_new = steer(q_near, q_rand, step_size)
+        if not collision_free(q_near, q_new):
+            continue
+
+        # 第4步:把 q_new 加进树,记下它的父节点是 q_near
+        tree.append(q_new)
+        parent[q_new] = q_near
+
+        # 如果 q_new 离 goal 够近了,成功!
+        if distance(q_new, goal) < threshold:
+            return reconstruct_path(q_new)
+    return None  # 达到最大迭代还没找到</code></pre>
+
+<div class="callout">
+<span class="callout-title">🔑 RRT 的精髓</span>
+<strong>它从不试图"理解"整个空间,只做局部生长。</strong> 每次随机一个方向,迈一小步。这种"盲但便宜"的策略,让它能在任何维度空间里跑——因为每一步的成本<strong>不随维度爆炸</strong>(不像 A* 要切格子)。这就是它对付维度灾难的法宝。
+</div>
+
+<h2 id="why-rrt-works">为什么"乱撒点"反而有效?</h2>
+
+<p>听起来 RRT 像"瞎走",但它有两个巧妙之处,让它<strong>快速覆盖大空间</strong>:</p>
+
+<ol>
+<li><strong>偏向未探索区域</strong>:因为每次朝"随机点"生长,而未探索的空旷区域更容易被随机命中(那里面积大),所以树天然地<strong>往空白处扩</strong>,而不是在已探索区域原地打转。这就是名字里"快速探索(Rapidly-exploring)"的由来。</li>
+<li><strong>概率完备性</strong>:只要路存在,迭代次数足够多时,<strong>找到路的概率趋于 1</strong>。严格说是"趋于确定",不是有限步内"一定",但工程上可当作"多撒点总能找到"。注意:是"能找到",不保证"最优"。</li>
+</ol>
+
+<h2 id="rrt-star">RRT* :从"能找到"到"找得好"</h2>
+
+<p>RRT 有个明显缺点:<strong>找到的路通常很绕、很丑</strong>(因为是随机生长的)。RRT* 是它的升级版,加了一步"重新连接":每加一个新节点,检查能不能让附近的节点通过新节点走得更短,从而<strong>不断优化整棵树</strong>。</p>
+
+<table>
+<thead><tr><th></th><th>RRT</th><th>RRT*</th></tr></thead>
+<tbody>
+<tr><td><strong>找到路</strong></td><td>✅ 快</td><td>✅ 慢一点</td></tr>
+<tr><td><strong>路的质量</strong></td><td>❌ 通常很绕</td><td>✅ 渐近最优(越跑越优)</td></tr>
+<tr><td><strong>何时用</strong></td><td>实时、只要可行解</td><td>离线、要高质量路径</td></tr>
+</tbody>
+</table>
+
+<div class="callout">
+<span class="callout-title">💡 和 A* 的取舍对比</span>
+<ul>
+<li><strong>A*</strong>:低维(2D/3D),保证最优,但要切格子</li>
+<li><strong>RRT</strong>:高维,不保证最优,但不切格子、能跑</li>
+<li><strong>RRT*</strong>:高维,渐近最优,但慢</li>
+</ul>
+<strong>工业实践常常混合</strong>:用 RRT 快速找一个可行解,再用轨迹优化(L1-05 提过)把它平滑成高质量的。这叫"采样规划 + 轨迹优化"两段式。
+</div>
+
+<h2 id="humanoid">为什么这课对人形是关键(重点)</h2>
+
+<div class="backend-analogy">
+你做人形,这课的重要性可能超过 A*:
+<ul>
+<li><strong>AGV 是 2~3 维</strong>(位置 + 朝向)→ A* 完美胜任,RRT 用不上。</li>
+<li><strong>机械臂是 6~7 维</strong>(每个关节一个角)→ A* 开始吃力,RRT 成为主力。</li>
+<li><strong>人形全身是 30+ 维</strong>(双腿+双臂+躯干+头,几十个关节)→ <strong>A* 彻底不可能,RRT(及其变体)是少数能跑的工具之一</strong>。</li>
+</ul>
+而且人形的"空间"不是物理 xyz 空间,是<strong>关节角度空间(Configuration Space / C-space)</strong>——每个维度是一个关节能转的角度。RRT 在这个抽象的高维空间里撒点生长,找到的就是"各关节该怎么动才能从姿态 A 到姿态 B"。
+</div>
+
+<h3>配置空间(C-space):一个必须懂的概念</h3>
+
+<p>这是 RRT 真正工作的地方,我简单讲透(这是人形/机械臂的核心概念):</p>
+
+<blockquote>
+<p><strong>配置空间(C-space)</strong>:把机器人的<strong>所有可能姿态</strong>表示成一个多维空间,每个维度是一个自由度(关节角)。机器人的一个"姿态"= C 空间里的一个"点"。</p>
+</blockquote>
+
+<table>
+<thead><tr><th>机器人</th><th>C 空间的维度</th><th>"一个点"代表</th></tr></thead>
+<tbody>
+<tr><td>2D AGV</td><td>2~3 维 (x,y,θ)</td><td>车在 (3,5) 朝向东</td></tr>
+<tr><td>6 轴机械臂</td><td>6 维</td><td>6 个关节各自的角度组合</td></tr>
+<tr><td>人形</td><td>30+ 维</td><td>全身几十个关节的角度组合</td></tr>
+</tbody>
+</table>
+
+<p>RRT 撒的"点",撒的就是<strong>这种姿态空间里的点</strong>——"机械臂各关节转到某组角度"。规划出来的"路",就是"各关节角度怎么连续变化"。这就是为什么 RRT 能搞定人形:A* 在这里会爆炸,而 RRT 不管维度多少,每步成本都低。</p>
+
+<h2 id="recap">小结</h2>
+
+<ul>
+<li>A* 这类网格搜索在<strong>高维空间</strong>(机械臂、人形)会遭遇<strong>维度灾难</strong>,彻底失效。</li>
+<li>RRT 的核心:<strong>不切格子,在空间随机撒点 + 向点生长</strong>,每步成本不随维度爆炸。</li>
+<li>RRT 概率完备(能找到),但路通常绕;RRT* 渐近最优(越跑越优),但慢。</li>
+<li>人形/机械臂的规划在<strong>配置空间(C-space)</strong>里进行——"姿态空间",维度 = 自由度数。</li>
+<li>工业实践:RRT 找可行解 + 轨迹优化平滑,是高维规划的标配两段式。</li>
+</ul>
+
+<div class="try-it">
+<h4>🔧 纸上思考(不用跑代码)</h4>
+<ol>
+<li>一个 2D 仓储 AGV(差速车),你会选 A* 还是 RRT 做路径规划?为什么?</li>
+<li>一个 6 轴机械臂要在桌面上抓取物体避开门框,你会选哪个?为什么?</li>
+<li>一队 2D AGV(多机),如果想让所有车<strong>同时</strong>规划无冲突路径——这里"维度灾难"会不会以另一种形式出现?(提示:N 台车作为一个整体,它的"状态"是什么?直接搜这个联合状态会怎样?)<em>L2 会讲工业上怎么巧妙地绕开硬搜联合空间</em></li>
+</ol>
+<p style="color:var(--muted);font-size:.9rem;">第 3 题是<strong>伏笔</strong>,答案直接通向 L2 的 MAPF。能想到的话就告诉我,想不到也正常,L2-03 会讲。</p>
+</div>
+
+<div class="section-quiz">
+<strong>✅ 自测(每题答案 4 个字,完全等长)</strong>
+<ol>
+<li>A* 这类网格搜索,在高维空间里遭遇的那个让格子数爆炸的现象,叫什么?</li>
+<li>RRT 每次循环的第一步,是在空间里做什么?(随机__)</li>
+<li>RRT 能保证"只要路存在、迭代够多就一定能找到",这个性质叫概率__?</li>
+<li>把"机器人所有可能姿态"表示成的那个多维空间(每维一个关节角),叫什么?</li>
+</ol>
+</div>
+
+<div class="section-source">
+<strong>🔗 推荐主源</strong><br>
+<a href="https://www.redblobgames.com/pathfinding/a-star/introduction.html">Red Blob Games</a> 提到过维度问题。RRT 的经典动画演示,搜 <em>"RRT pathfinding visualization"</em> 看随机树怎么生长——直观感受"快速探索"。原始论文:LaValle (1998) "Rapidly-exploring random trees" 是开山之作,可选读。
+</div>
+
+<div class="section-ask">
+<strong>❓ 有问题随时问。</strong>这课的配置空间(C-space)概念对人形很关键,如果"姿态空间""关节角度作为维度"这个抽象让你觉得绕,告诉我,我换种讲法。第 3 题的伏笔如果你想到了,特别想知道你的答案——它直接连接 L2。
+</div>
+
+<div class="lesson-nav">
+  <a href="0010-l1-05-trajectory.html">← 上一课:L1-05 运动学与轨迹</a>
+  <span style="color:var(--muted);">L1 阶段完成 → 下一阶段 L2 多机调度核心</span>
+</div>
+
+</body>
+</html>

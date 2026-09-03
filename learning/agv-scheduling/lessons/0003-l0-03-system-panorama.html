@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>L0-03 · 调度系统全景图</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  /* 本课专用:全景图样式 */
+  .panorama {
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: #fafaf7;
+    padding: 1rem;
+    margin: 1.5rem 0;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: .82rem;
+    line-height: 1.5;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .layer-label {
+    display: inline-block;
+    background: var(--accent);
+    color: #fff;
+    padding: .15rem .6rem;
+    border-radius: 3px;
+    font-weight: 600;
+    font-size: .8rem;
+  }
+  .layer-label.exec { background: #5a8a2a; }
+  .layer-label.strat { background: #8a5a2a; }
+  .module-card {
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: .8rem 1rem;
+    margin: 1rem 0;
+    background: #fff;
+  }
+  .module-card h4 { margin-top: 0; color: var(--accent); }
+  .module-card .leads-to {
+    font-size: .85rem;
+    color: var(--muted);
+    border-top: 1px dashed var(--rule);
+    padding-top: .4rem;
+    margin-top: .6rem;
+  }
+</style>
+</head>
+<body>
+
+<h1>L0-03 · 调度系统全景图</h1>
+
+<div class="lesson-meta">
+  <span class="tag">阶段 L0 地基</span>
+  <span class="tag">难度:入门(信息量大)</span>
+  <span class="tag">前置:L0-01, L0-02</span>
+  <span class="tag">预计:50 分钟</span>
+</div>
+
+<div class="section-goal">
+  <strong>🎯 这节课你将学会:</strong>看着一张图,讲清楚一个工业级调度系统<strong>由哪些模块组成、各模块职责、数据怎么流转</strong>。这是整门课的「地图」——之后你每学一个算法,都能回到这张图问「它在哪一层、哪个模块、优化什么」。本课不深入任何模块的细节,只把骨架立起来。
+</div>
+
+<div class="callout">
+<span class="callout-title">📌 怎么用这节课</span>
+这课信息量大,不要试图一次记住所有细节。目标是<strong>建立一张 mental map</strong>:看到「A*」「CBS」「VDA5050」这些词,你能立刻定位到图上的某个模块。细节以后每个模块都有专门的课。现在请把这张图当作「目录」反复回看。
+</div>
+
+<h2 id="big-picture">一张图看懂整个调度系统</h2>
+
+<p>下面这张图是本课程的「总纲」。从上到下三层(L0-01 讲过的战略/战术/执行),每层里是具体模块。数据流从上往下流动,状态从下往上反馈。</p>
+
+<div class="panorama">┌─────────────────────────────────────────────────────────────────┐
+│  <span class="layer-label strat">战略层 / 任务管理层</span>   ← 与业务系统(WMS/MES/订单系统)对接        │
+│                                                                   │
+│   ┌──────────────┐   ┌──────────────┐   ┌──────────────────┐      │
+│   │ ① 任务接入   │──▶│ ② 任务编排   │──▶│ ③ 优先级/批量    │      │
+│   │   (接收订单) │   │ (拆解/合并) │   │   (调度策略)     │      │
+│   └──────────────┘   └──────────────┘   └────────┬─────────┘      │
+│                                                   │ 任务队列       │
+└───────────────────────────────────────────────────┼───────────────┘
+                                                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  <span class="layer-label">战术层 / 调度引擎 ⭐核心</span>   ← 本课程的主战场(L1~L3)            │
+│                                                                   │
+│   ┌──────────────┐   ┌──────────────┐   ┌──────────────────┐      │
+│   │ ④ 任务分配   │──▶│ ⑤ 路径规划   │──▶│ ⑥ 冲突消解       │      │
+│   │ (哪台车干啥) │   │ (走哪条路)   │   │ (MAPF/CBS 不撞) │      │
+│   └──────┬───────┘   └──────┬───────┘   └────────┬─────────┘      │
+│          │   ┌──────────────┴───────────────┐    │                │
+│          │   │  ⑦ 交通管制 / 死锁防护        │◀───┘                │
+│          │   │  (路口/区域/环形通道)         │                     │
+│          │   └──────────────────────────────┘                     │
+│          ▼                                                        │
+│   ┌──────────────────┐   ┌──────────────────────────────┐         │
+│   │ ⑧ 地图/拓扑管理 │   │ ⑨ 车队状态(位置/电量/状态) │         │
+│   │   (节点/边/权重)│   │   (实时维护)                 │         │
+│   └──────────────────┘   └──────────────────────────────┘         │
+└───────────────────────────────────┬───────────────────────────────┘
+                                    ▼ 指令下发
+┌─────────────────────────────────────────────────────────────────┐
+│  <span class="layer-label exec">执行层 / 车辆管理层 + 通信层</span>                              │
+│                                                                   │
+│   ┌──────────────┐   ┌──────────────┐   ┌──────────────────┐      │
+│   │ ⑩ 指令下发   │──▶│ ⑪ 状态上报   │──▶│ ⑫ 故障/容错      │      │
+│   │ (VDA5050等)  │   │ (位置/心跳)  │   │ (重分配/降级)    │      │
+│   └──────────────┘   └──────────────┘   └──────────────────┘      │
+│                                                                   │
+│   ┌─────────────────────────────────────────────────────┐         │
+│   │           通信总线 (MQTT / WebSocket / gRPC)         │         │
+│   └─────────────────────────────────────────────────────┘         │
+└───────────────────────────────────────────────────────────────────┘
+        ▲                                                    │
+        └──────────── 状态反馈闭环(持续滚动重规划)────────────┘</div>
+
+<div class="backend-analogy">
+这张图你用后端视角看,就是一张<strong>实时分布式后端的架构图</strong>:
+<ul>
+<li>战略层 ≈ <strong>业务编排层</strong>(接入外部订单,决定走哪条业务流)</li>
+<li>战术层 ≈ <strong>调度器 + 路由 + 锁服务</strong>(核心计算都在这)</li>
+<li>执行层 ≈ <strong>Worker 节点 + 消息总线 + 监控/熔断</strong></li>
+<li>右侧那条「状态反馈闭环」≈ <strong>健康检查 + 自动重均衡</strong></li>
+</ul>
+你已经会画这类图了,只是把「服务实例」换成了「会动的车」,把「网络路由」换成了「带物理约束的路径」。
+</div>
+
+<h2 id="modules">12 个模块逐个点名(只认人,不深入)</h2>
+
+<p>下面把图里 12 个编号模块逐个过一遍。每个模块:它是干嘛的、对应哪节课、对应你哪个后端经验。<strong>现在不必记住细节,只需建立"看到词→定位到模块"的反射。</strong></p>
+
+<h3>战略层(任务管理)</h3>
+
+<div class="module-card">
+<h4>① 任务接入 (Task Ingestion)</h4>
+<p>从外部系统(WMS 仓储管理 / MES 制造执行 / 订单系统)接收原始任务。要处理协议适配、限流、去重、ack。</p>
+<p class="leads-to"><strong>对应课:</strong>L3-03(协议)。<strong>后端映射:</strong>API 网关 / 消息消费者。<strong>人形伏笔:</strong>人形的"任务"来源更多元(语音指令、视觉触发、日程系统)。</p>
+</div>
+
+<div class="module-card">
+<h4>② 任务编排 (Task Orchestration)</h4>
+<p>把一个粗粒度任务(如"完成订单 #123")拆成车辆能执行的原子任务(去A点→取货→去B点→放下)。也可反向合并多个小任务提升效率。</p>
+<p class="leads-to"><strong>对应课:</strong>L3-01。<strong>后端映射:</strong>工作流引擎(Temporal/Airflow/状态机)。<strong>人形伏笔 ⭐:</strong>人形任务编排复杂度爆炸——"泡杯咖啡"要拆成 移动→开门→取杯→操作咖啡机→移动→递送,每步是一个<strong>技能(Skill)</strong>。这是 AGV→人形最关键的升级点。</p>
+</div>
+
+<div class="module-card">
+<h4>③ 优先级与批量策略 (Priority & Batching)</h4>
+<p>决定哪些任务先做、哪些合并做、哪些插队。受业务规则(SLA、紧急程度)和效率(顺路合并)双重驱动。</p>
+<p class="leads-to"><strong>对应课:</strong>L3-01。<strong>后端映射:</strong>优先级队列 + 批处理。</p>
+</div>
+
+<h3>战术层(调度引擎)⭐ 本课程主战场</h3>
+
+<div class="module-card">
+<h4>④ 任务分配 (Task Allocation)</h4>
+<p>从待执行任务池里,给每台车分配任务。核心权衡:全局最优(算得慢)vs 快速就近(次优但快)。</p>
+<p class="leads-to"><strong>对应课:</strong>L2-01。<strong>后端映射:</strong>负载均衡器选 worker。<strong>人形伏笔:</strong>人形任务分配要看"谁会这个技能"——不只是位置,还有能力匹配。</p>
+</div>
+
+<div class="module-card">
+<h4>⑤ 路径规划 (Path Planning)</h4>
+<p>给单台车算一条从当前位置到目标的路线。核心算法:Dijkstra、A*。要考虑底盘运动学约束(能不能原地转)。</p>
+<p class="leads-to"><strong>对应课:</strong>L1-03、L1-04(单车);L2-04(多车协同)。<strong>后端映射:</strong>网络路由(OSPF 用 Dijkstra)。<strong>人形伏笔:</strong>人形是高自由度,路径规划升级为"全身运动规划"(L1-06 RRT 的用武之地)。</p>
+</div>
+
+<div class="module-card">
+<h4>⑥ 冲突消解 (Conflict Resolution)</h4>
+<p>确保多台车规划出的路径在<strong>时间和空间上不撞</strong>。核心问题 MAPF,核心算法 CBS。这是整个调度系统技术含量最高的模块。</p>
+<p class="leads-to"><strong>对应课:</strong>L2-02、L2-03、L2-04(硬骨头,三节课)。<strong>后端映射:</strong>分布式锁 + 乐观并发控制。<strong>人形伏笔:</strong>人形之间不只是"位置冲突",还有"手臂工作空间冲突"。</p>
+</div>
+
+<div class="module-card">
+<h4>⑦ 交通管制 / 死锁防护 (Traffic & Deadlock)</h4>
+<p>管路口(谁先过)、单向通道、环形通道(防止 4 车死锁)。冲突消解管"两两不撞",这里管"全局流得动"。</p>
+<p class="leads-to"><strong>对应课:</strong>L2-05。<strong>后端映射:</strong>数据库死锁检测 + 限流/信号量。</p>
+</div>
+
+<div class="module-card">
+<h4>⑧ 地图/拓扑管理 (Map & Topology)</h4>
+<p>把物理空间抽象成"节点+边+权重"的图,供路径规划使用。维护静态结构(通道)和动态状态(某段路临时封锁)。</p>
+<p class="leads-to"><strong>对应课:</strong>L1-01(本课程第一个动手模块)。<strong>后端映射:</strong>数据模型设计 / 图数据库。<strong>人形伏笔:</strong>人形地图不只是 2D 平面,还有 3D 可达性(能伸手够到哪)、语义地图(这是桌子、那是抽屉)。</p>
+</div>
+
+<div class="module-card">
+<h4>⑨ 车队状态 (Fleet State)</h4>
+<p>实时维护每台车的:位置、朝向、速度、电量、当前任务、健康状态。所有决策的输入。</p>
+<p class="leads-to"><strong>对应课:</strong>L3-02。<strong>后端映射:</strong>服务注册中心 + 心跳/健康检查。</p>
+</div>
+
+<h3>执行层(车辆管理 + 通信)</h3>
+
+<div class="module-card">
+<h4>⑩ 指令下发 (Command Dispatch)</h4>
+<p>把规划好的路径/动作翻译成车辆能理解的指令序列,通过协议下发给车。</p>
+<p class="leads-to"><strong>对应课:</strong>L3-03(VDA5050)。<strong>后端映射:</strong>RPC 调用 / 消息推送。</p>
+</div>
+
+<div class="module-card">
+<h4>⑪ 状态上报 (State Reporting)</h4>
+<p>车辆持续上报位置和状态。频率和可靠性直接决定调度质量(数据陈旧=瞎调度)。</p>
+<p class="leads-to"><strong>对应课:</strong>L3-02。<strong>后端映射:</strong>遥测 / metrics 上报。</p>
+</div>
+
+<div class="module-card">
+<h4>⑫ 故障 / 容错 (Fault Tolerance)</h4>
+<p>车掉线、死车、电量耗尽、地图封锁——检测、处理、重分配、降级。生产系统 7×24 稳定的关键。</p>
+<p class="leads-to"><strong>对应课:</strong>L3-04。<strong>后端映射:</strong>熔断、重试、补偿事务、最终一致性。<strong>人形伏笔:</strong>人形跌倒/卡住的恢复远比 AGV 复杂(AGV 停了等人推,人形要自主站起来)。</p>
+</div>
+
+<h2 id="dataflow">一次完整的数据流(把模块串起来)</h2>
+
+<p>用 L0-01 那个「1 个订单的旅程」的例子,但这次标注它经过了<strong>哪些模块</strong>。把编号对回上面的图:</p>
+
+<pre><code>WMS 下发"搬 3 号货架到 P12"
+  │
+  ▼ ①任务接入 → ②任务编排(拆成:去3号→驮起→去P12→放下) → ③优先级(普通)
+  │
+  ▼ ④任务分配:查 ⑨车队状态,选最近、有电、空闲的 AGV-04
+  │
+  ▼ ⑤路径规划:查 ⑧地图,用 A* 算 AGV-04 的路线
+  │
+  ▼ ⑥冲突消解:检查时间窗,发现路口K要等AGV-07 → ⑦交通管制协调
+  │
+  ▼ ⑩指令下发:通过 VDA5050 把节点序列发给 AGV-04
+  │
+  ▼ AGV-04 执行,⑪持续上报位置 → ⑨更新车队状态
+  │
+  ▼ 若 AGV-07 卡住 → ⑫故障容错 → 触发 ⑤⑥重算 → 新指令下发
+  │
+  ▼ AGV-04 到达 P12,任务完成,释放资源</code></pre>
+
+<div class="callout">
+<span class="callout-title">🔑 三个关键观察</span>
+<ul>
+<li><strong>几乎所有战术层模块都要查 ⑨车队状态、⑧地图</strong>——这两个是共享数据,是系统瓶颈点(L3-02 会讲)。</li>
+<li><strong>⑥冲突消解依赖 ⑤路径规划的结果</strong>,但又会反过来修改它——这是战术层最复杂的耦合。</li>
+<li><strong>整条链路是个闭环</strong>:指令下发后,状态上报回来,可能触发重规划。这就是 L3-02 的「滚动重规划」循环。</li>
+</ul>
+</div>
+
+<h2 id="where-l1-l5">这 12 个模块怎么对应到 L1~L5</h2>
+
+<p>现在你知道了,本课程 L1~L5 本质就是在<strong>逐个吃掉这 12 个模块</strong>:</p>
+
+<table>
+<thead><tr><th>阶段</th><th>主要攻克的模块</th></tr></thead>
+<tbody>
+<tr><td><strong>L1 单机</strong></td><td>⑧地图、⑤路径规划(单车)、底盘运动学约束</td></tr>
+<tr><td><strong>L2 多机核心</strong></td><td>④任务分配、⑥冲突消解(MAPF/CBS)、⑦死锁防护</td></tr>
+<tr><td><strong>L3 工程化</strong></td><td>①②③编排、⑨状态、⑩⑪通信(VDA5050)、⑫容错 + 整体架构</td></tr>
+<tr><td><strong>L4 拓展</strong></td><td>把这套架构迁移到 MRS、<strong>人形(⭐你的核心)</strong>、群体智能</td></tr>
+<tr><td><strong>L5 实战</strong></td><td>把 12 个模块集成成一个能跑的系统</td></tr>
+</tbody>
+</table>
+
+<h2 id="humanoid-preview">人形调度:这张图会怎么变(预告)</h2>
+
+<div class="backend-analogy">
+既然你在做人形,提前告诉你:上面这张「AGV 调度全景图」到了人形,骨架不变,但有<strong>四个模块会膨胀或变形</strong>:
+<ol>
+<li><strong>②任务编排</strong>:从"搬运编排"升级为"<strong>技能编排(Skill Orchestration)</strong>"——这是最大的变化,人形调度本质是技能工作流引擎。</li>
+<li><strong>⑤路径规划</strong>:从 2D 平面路径,升级为"<strong>全身运动规划</strong>"(几十个关节)。</li>
+<li><strong>⑧地图</strong>:从 2D 拓扑图,升级为"<strong>3D + 语义地图</strong>"(知道哪是桌面、哪是抽屉、手能伸到哪)。</li>
+<li><strong>⑫容错</strong>:从"停车等人",升级为"<strong>自主恢复</strong>"(跌倒自起、卡住脱困)。</li>
+</ol>
+其他模块(④分配、⑥冲突消解、⑦死锁、⑨状态、⑩⑪通信)的<strong>原理可直接迁移</strong>。这就是为什么我们要把 AGV 这套学扎实——它是人形调度的地基,80% 的骨架可以复用。
+</div>
+
+<h2 id="recap">小结</h2>
+
+<ul>
+<li>调度系统 = 三层(战略/战术/执行)× 12 个模块,数据从上往下流、状态从下往上反馈,形成闭环。</li>
+<li><strong>战术层(调度引擎)是主战场</strong>,其中 ⑥冲突消解(MAPF/CBS)技术含量最高。</li>
+<li>整张图本质是一个<strong>实时分布式后端</strong>——你的主场。差异只在"把服务实例换成会动的车,把网络路由换成带物理约束的路径"。</li>
+<li>这张图到人形,骨架不变,但 ②⑤⑧⑫ 四个模块会膨胀——L4-02 会专门讲怎么迁移。</li>
+</ul>
+
+<div class="section-quiz">
+<strong>✅ 自测(每题答案 4 个字,完全等长)</strong>
+<ol>
+<li>本课程技术含量最高、专门用三节课来讲的那个模块,叫什么?</li>
+<li>把物理空间抽象成"节点+边+权重"的图,这个模块叫什么?</li>
+<li>车辆持续上报位置和状态的那个模块,叫什么?</li>
+<li>把"完成订单#123"拆成车辆能执行的原子动作序列,这个模块叫什么?</li>
+</ol>
+<p style="color:var(--muted);font-size:.85rem;margin-top:.8rem;">这 4 题考的是"看到概念能定位到模块",全对说明全景图在你脑子里立住了。下一课 L0-04 是<strong>加速器课</strong>——把调度概念系统性地翻译成后端概念,建立一张对照表。鉴于你是后端老兵,那课你会非常舒服。</p>
+</div>
+
+<div class="section-source">
+<strong>🔗 推荐主源</strong><br>
+本课是综合视图,没有单一最佳外链。建议<strong>把上面的全景图截图保存</strong>,后面每学一个模块都在图上标一下进度。这是最有效的"目录"。想看真实工业系统的模块划分,可以扫一眼 <a href="https://www.vda.de/en/services/Publications/vda-5050-version-2.0-.html">VDA5050 规范目录</a>(L3-03 会精读),它会反推出工业界认可的系统边界。
+</div>
+
+<div class="section-ask">
+<strong>❓ 有问题随时问。</strong>特别想问你:你现在做人形,团队里<strong>调度这块目前是怎么做的</strong>?(比如是不是还没有专门调度层、每台机器人各跑各的?或者已经有个雏形?)这能帮我后面的课(尤其 L4-02)更贴合你实际面对的问题。
+</div>
+
+<div class="lesson-nav">
+  <a href="0002-l0-02-what-is-agv.html">← 上一课:L0-02 AGV/移动机器人是什么</a>
+  <a class="next" href="0004-l0-04-backend-translation.html">下一课:L0-04 后端经验如何迁移 →</a>
+</div>
+
+</body>
+</html>

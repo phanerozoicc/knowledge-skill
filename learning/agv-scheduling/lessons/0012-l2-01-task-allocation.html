@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>L2-01 · 任务分配:谁来干这个活</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .try-it {
+    border: 2px dashed var(--accent);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    margin: 1.5rem 0;
+    background: #f7fbfd;
+  }
+  .try-it h4 { margin-top: 0; color: var(--accent); }
+</style>
+</head>
+<body>
+
+<h1>L2-01 · 任务分配:谁来干这个活</h1>
+
+<div class="lesson-meta">
+  <span class="tag">阶段 L2 多机调度核心</span>
+  <span class="tag">难度:中等</span>
+  <span class="tag">前置:L1 全部</span>
+  <span class="tag">预计:50 分钟</span>
+</div>
+
+<div class="section-goal">
+  <strong>🎯 这节课你将学会:</strong>从单机进入多机的第一道关——<strong>任务分配</strong>:一批任务来了,该怎么决定每台车干哪个?你会理解三种主流策略(贪心 / 匈牙利算法 / 拍卖),知道它们在"全局最优 vs 实时性"上的取舍。这是 L2 的入口,相对友好,为后面 L2-04(CBS)做铺垫。
+</div>
+
+<div class="callout">
+<span class="callout-title">📌 你在哪一层</span>
+L2 是整个课程最难也最核心的阶段。但这第一课(L2-01)是你的<strong>舒适区</strong>——任务分配本质就是后端的负载均衡,你已经会了。我们快速建立正式语言,重点放在三种策略的取舍上。
+</div>
+
+<h2 id="problem">问题:把任务分给车</h2>
+
+<p>L1 你解决的是"一台车怎么从 A 到 B"。现在多台车、多个任务,第一个问题就是:<strong>哪个任务交给哪台车?</strong></p>
+
+<figure class="svg-fig">
+<svg viewBox="0 0 480 240" xmlns="http://www.w3.org/2000/svg">
+  <text x="240" y="22" text-anchor="middle" font-size="13" font-weight="600" fill="#0b6e99">任务分配问题:4 个任务,3 台车</text>
+  <!-- 任务 -->
+  <g>
+    <circle cx="80" cy="80" r="14" fill="#fef3e2" stroke="#b54708" stroke-width="2"/><text x="80" y="84" text-anchor="middle" font-size="9" fill="#b54708">T1</text>
+    <circle cx="180" cy="60" r="14" fill="#fef3e2" stroke="#b54708" stroke-width="2"/><text x="180" y="64" text-anchor="middle" font-size="9" fill="#b54708">T2</text>
+    <circle cx="300" cy="70" r="14" fill="#fef3e2" stroke="#b54708" stroke-width="2"/><text x="300" y="74" text-anchor="middle" font-size="9" fill="#b54708">T3</text>
+    <circle cx="400" cy="85" r="14" fill="#fef3e2" stroke="#b54708" stroke-width="2"/><text x="400" y="89" text-anchor="middle" font-size="9" fill="#b54708">T4</text>
+    <text x="240" y="42" text-anchor="middle" font-size="10" fill="#b54708">任务(待分配)</text>
+  </g>
+  <!-- 车 -->
+  <g>
+    <rect x="70" y="180" width="30" height="20" rx="3" class="robot"/><text x="85" y="194" text-anchor="middle" font-size="8" fill="#fff">V1</text>
+    <rect x="210" y="180" width="30" height="20" rx="3" class="robot"/><text x="225" y="194" text-anchor="middle" font-size="8" fill="#fff">V2</text>
+    <rect x="370" y="180" width="30" height="20" rx="3" class="robot"/><text x="385" y="194" text-anchor="middle" font-size="8" fill="#fff">V3</text>
+    <text x="240" y="225" text-anchor="middle" font-size="10" fill="#0b6e99">车辆(空闲)</text>
+  </g>
+  <!-- 问号 -->
+  <text x="240" y="140" text-anchor="middle" font-size="28" fill="#595959" font-weight="700">?</text>
+</svg>
+<figcaption>任务分配:决定哪个任务(T)交给哪台车(V),目标是最小化总代价/最大化吞吐</figcaption>
+</figure>
+
+<p>形式化一点:有 N 个任务、M 台车,每个"任务-车"组合有一个代价(通常是车到任务起点的距离)。要找一个分配方案,让<strong>总代价最小</strong>(或某种全局指标最优)。</p>
+
+<div class="callout">
+<span class="callout-title">💡 代价怎么算?别每次都跑 A*</span>
+严格说,代价是"车到任务起点的路径长度"。但<strong>任务分配阶段不需要跑完整 A*</strong>(太慢,几百台车 × 几十个任务就是几千次规划)。工业上通常用<strong>直线距离(欧几里得)快速估算</strong>就够了——因为分配只在乎"远近"的相对关系,不在乎精确路径。真正的 A* 规划在<strong>分配完之后</strong>才跑(只给中标的车跑)。这是"用粗糙估算做决策,用精确计算做执行"的常见工程套路。
+</div>
+
+<div class="backend-analogy">
+这就是<strong>负载均衡器选实例</strong>。一堆请求(任务)进来,负载均衡器决定每个请求打给哪个后端实例(车)。代价 = "把请求路由到该实例的延迟/负载"。你已经天天在做这件事。区别:后端的代价通常是"队列长度/CPU",调度里的代价是"物理距离"——通常用直线距离快速估算,精确 A* 留到分配完才跑。
+</div>
+
+<h2 id="strategies">三种主流策略(按"从笨到聪明"排)</h2>
+
+<h3>策略 1:贪心(Greedy)— 就近分配</h3>
+
+<p>最简单:每个任务来,找<strong>离它最近</strong>的空闲车,分给它。或者反过来:每台空闲车,抢离自己最近的待办任务。</p>
+
+<pre><code>def greedy_allocate(tasks, vehicles):
+    allocation = {}
+    for task in tasks:
+        # 找最近的空闲车
+        v = min(vehicles, key=lambda v: distance(v, task))
+        allocation[v] = task
+        vehicles.remove(v)    # 这车忙了
+    return allocation</code></pre>
+
+<p><strong>优点</strong>:极快,实现简单,实时性好。每个任务来了立刻分配,不等。</p>
+<p><strong>缺点</strong>:<strong>短视</strong>,不保证全局最优。经典反例:</p>
+
+<div class="callout warn">
+<span class="callout-title">⚠️ 贪心的陷阱</span>
+任务 T1 离车 V1 很近(代价 1),离 V2 远(代价 10)。贪心会把 T1 给 V1。<br>
+但任务 T2 离 V1 中等(代价 2),离 V2 极远(代价 100)。<br>
+贪心接着把 T2 给 V2 → 总代价 1+100=101。<br>
+<strong>而最优解是</strong>:T1 给 V2,T2 给 V1 → 总代价 10+2=12。<br>
+贪心因为短视,错过了总代价低 8 倍的方案。
+</div>
+
+<h3>策略 2:匈牙利算法(Hungarian)— 全局最优</h3>
+
+<p>贪心短视,因为它一个一个分配。匈牙利算法<strong>一次性考虑所有任务-车组合,求全局最优分配</strong>。</p>
+
+<p>它把问题建模成:造一个 M×N 的<strong>代价矩阵</strong>(每行一辆车,每列一个任务,格子里是该车干该任务的代价),然后找一种"每车一任务、每任务一车"的分配,让<strong>选中格子之和最小</strong>。</p>
+
+<figure class="svg-fig">
+<svg viewBox="0 0 360 220" xmlns="http://www.w3.org/2000/svg">
+  <text x="180" y="22" text-anchor="middle" font-size="12" font-weight="600" fill="#0b6e99">代价矩阵 + 最优分配</text>
+  <!-- 表格 -->
+  <g font-family="monospace" font-size="13">
+    <text x="150" y="55" text-anchor="middle" fill="#595959">T1</text>
+    <text x="220" y="55" text-anchor="middle" fill="#595959">T2</text>
+    <text x="60" y="95" fill="#595959">V1</text>
+    <text x="60" y="145" fill="#595959">V2</text>
+    <!-- V1 行 -->
+    <text x="150" y="95" text-anchor="middle" fill="#5a8a2a" font-weight="700">1</text>
+    <text x="220" y="95" text-anchor="middle" fill="#0b6e99" font-weight="700">2</text>
+    <!-- V2 行 -->
+    <text x="150" y="145" text-anchor="middle" fill="#0b6e99" font-weight="700">10</text>
+    <text x="220" y="145" text-anchor="middle" fill="#5a8a2a" font-weight="700">100</text>
+    <!-- 高亮最优选择 -->
+    <rect x="133" y="80" width="34" height="30" fill="none" stroke="#5a8a2a" stroke-width="2.5"/>
+    <rect x="203" y="80" width="34" height="30" fill="none" stroke="#0b6e99" stroke-width="2.5"/>
+  </g>
+  <text x="180" y="195" text-anchor="middle" font-size="11" fill="#5a8a2a">最优:V1→T2(2), V2→T1(10),总12</text>
+  <text x="180" y="212" text-anchor="middle" font-size="10" fill="#595959">(而非贪心的 V1→T1,V2→T2,总101)</text>
+</svg>
+<figcaption>匈牙利算法一次看全矩阵,找出总代价最小的分配。复杂度 O(n³)</figcaption>
+</figure>
+
+<p><strong>优点</strong>:<strong>全局最优</strong>。在这个小例子里,它能找到代价 12 的方案(贪心只能找到 101)。</p>
+<p><strong>缺点</strong>:<strong>慢</strong>。复杂度 O(n³),任务和车一多就吃力。而且它要求"一次性看全部任务"——但实时系统里任务是一个个流式来的,你等不齐"全部任务"再分配。</p>
+
+<div class="backend-analogy">
+匈牙利算法 ≈ 后端的<strong>批处理调度</strong>:攒一批请求一起优化分配,质量高但要等。贪心 ≈ <strong>逐请求路由</strong>:来一个转一个,快但可能次优。这个取舍你后端天天在做。
+</div>
+
+<h3>策略 3:拍卖机制(Auction / CN)— 分布式协商</h3>
+
+<p>前两种都是<strong>中央独裁</strong>。拍卖机制相反:中央喊任务,各车<strong>自己出价</strong>(基于自己的代价评估),价优者得。</p>
+
+<pre><code>def auction(task, vehicles):
+    bids = {}
+    for v in vehicles:
+        bids[v] = v.compute_bid(task)   # 每台车自己评估"我干这个要花多少代价"
+    winner = min(bids, key=bids.get)     # 出价最低(代价最小)的赢
+    return winner</code></pre>
+
+<p><strong>优点</strong>:<strong>分布式、可扩展</strong>。车数很多时,中央不用算所有组合,只要收出价。容易加新车(它自己学着出价就行)。也契合你规划的"车端有自主能力 + 中央审核"的混合架构。</p>
+<p><strong>缺点</strong>:需要通信往返(喊任务→收出价→宣布中标),有延迟;出价策略设计不好会次优。</p>
+
+<div class="backend-analogy">
+拍卖 ≈ <strong>服务发现 + 客户端负载均衡</strong>(如 Ribbon):不再由中央独裁,而是各实例广播自己的负载/能力,请求方按规则挑。你规划的"车端规划+调度审核"架构,本质就是一种<strong>带审核的拍卖</strong>——车端出价(自己规划的方案),调度审核(冲突/死锁检查)。
+</div>
+
+<h2 id="tradeoff">三者对比:经典的工程权衡</h2>
+
+<table>
+<thead><tr><th></th><th>贪心</th><th>匈牙利</th><th>拍卖(CN)</th></tr></thead>
+<tbody>
+<tr><td><strong>最优性</strong></td><td>❌ 次优(短视)</td><td>✅ 全局最优</td><td>≈ 近似最优(取决于出价)</td></tr>
+<tr><td><strong>速度</strong></td><td>✅ 极快</td><td>❌ O(n³)</td><td>中等(要通信)</td></tr>
+<tr><td><strong>架构</strong></td><td>中央</td><td>中央</td><td><strong>分布式</strong></td></tr>
+<tr><td><strong>可扩展</strong></td><td>好</td><td>差</td><td><strong>最好</strong></td></tr>
+<tr><td><strong>实时性</strong></td><td>✅ 流式</td><td>❌ 要等齐一批</td><td>✅ 流式</td></tr>
+<tr><td><strong>后端映射</strong></td><td>逐请求路由</td><td>批处理调度</td><td>服务发现+客户端LB</td></tr>
+</tbody>
+</table>
+
+<div class="callout">
+<span class="callout-title">📌 工业实践:不选一个,而是组合</span>
+真实系统常常<strong>分层</strong>:
+<ul>
+<li><strong>高频流式任务</strong>用贪心/拍卖,保证实时</li>
+<li><strong>低频批量优化</strong>(比如每小时的全局重均衡)用匈牙利,纠正贪心积累的偏差</li>
+</ul>
+这就像后端:日常用缓存+快速路由,定期跑批校正数据。没有银弹,只有权衡——L0-05 的 NP-hard 教训在这里又一次应验。
+</div>
+
+<h2 id="with-routing">任务分配和路径规划的关系(伏笔)</h2>
+
+<p>注意一个关键点:<strong>"代价"是路径相关的</strong>(车到任务起点的距离,通常用直线距离估算)。所以任务分配和路径规划有依赖——你得先知道每台车到每个任务大致多远,才能分配。</p>
+
+<p>但这只是单机代价。<strong>真正的难点在后面</strong>:分完任务、各车开始规划路径后,它们会<strong>互相冲突</strong>。任务分配阶段完全没考虑冲突——它只看了"谁离得近",没看"会不会撞"。这就是 L2-02(冲突分类)和 L2-04(CBS)要补的洞。</p>
+
+<div class="callout warn">
+<span class="callout-title">🔑 这就是为什么 L2 要拆成三步</span>
+<ol>
+<li><strong>任务分配</strong>(本课):谁干啥——基于单机代价</li>
+<li><strong>路径规划</strong>:各自 A*——单机最优路径</li>
+<li><strong>冲突消解</strong>(L2-04 CBS):发现彼此冲突,重算——多机协调</li>
+</ol>
+每一步都以为前一步搞定了,结果下一步发现问题。这是多机调度的本质复杂性。L2-06 会把三步串成完整流程。
+</div>
+
+<h2 id="humanoid">人形伏笔</h2>
+
+<div class="backend-analogy">
+对人形,任务分配多一个维度:<strong>能力匹配</strong>。
+<ul>
+<li>AGV 都是同构的(谁都能搬货架),分配只看距离</li>
+<li>人形是<strong>异构</strong>的——不是每台都会"泡咖啡"或"开门"。分配时要看"谁会这个技能"</li>
+</ul>
+这对应后端的<strong>能力路由</strong>:不是所有实例都能处理所有请求(有的有 GPU、有的有特殊许可证),负载均衡要考虑实例能力。人形任务分配 = 带能力约束的负载均衡。L4-02 会展开。
+</div>
+
+<h2 id="recap">小结</h2>
+
+<ul>
+<li>任务分配 = 负载均衡选实例的调度版,代价是物理距离(通常直线估算,A* 留到分配后)。</li>
+<li>三种策略:贪心(快但次优)、匈牙利(最优但慢)、拍卖(分布式可扩展)。</li>
+<li>工业实践常组合:流式用贪心/拍卖,批量用匈牙利纠偏。</li>
+<li><strong>关键:任务分配只看单机代价,不看冲突</strong>——冲突是 L2-02/L2-04 的事。</li>
+<li>人形多了"能力匹配"维度(异构)。</li>
+</ul>
+
+<div class="try-it">
+<h4>🔧 纸上思考</h4>
+<ol>
+<li>实时仓储(任务一个个来,要求秒级响应),你会选哪种策略?为什么?</li>
+<li>夜间全场停车后的批量重排(任务都齐了,要质量),你会选哪种?</li>
+<li>你规划的"车端规划+调度审核"混合架构,更接近哪种策略的思想?</li>
+</ol>
+<p style="color:var(--muted);font-size:.9rem;">第 3 题对接你团队的真实架构,答案会帮我校准 L3-01。</p>
+</div>
+
+<div class="section-quiz">
+<strong>✅ 自测(每题答案 4 个字,完全等长)</strong>
+<ol>
+<li>贪心分配因为"一个一个分、只看眼前",它在性质上不保证什么?</li>
+<li>能一次性看全部任务-车组合、求全局最优分配的那个算法,叫什么?</li>
+<li>中央喊任务、各车自己出价、价优者得的分布式策略,叫什么机制?</li>
+<li>任务分配阶段算"代价"时,用的是哪个路径规划算法?</li>
+</ol>
+</div>
+
+<div class="section-source">
+<strong>🔗 推荐主源</strong><br>
+拍卖机制的经典论文:Market-Based Multi-Robot Coordination。匈牙利算法搜 <em>"Hungarian algorithm assignment problem"</em> 有大量可视化讲解。
+</div>
+
+<div class="section-ask">
+<strong>❓ 有问题随时问。</strong>这课是你的舒适区(负载均衡),应该过得快。第 3 题思考特别想听你的答案——它直接连接你团队的"车端规划+审核"架构。答完我们就进 L2-02(冲突分类),那是真正开始难的地方。
+</div>
+
+<div class="lesson-nav">
+  <a href="0011-l1-06-rrt.html">← 上一课:L1-06 RRT</a>
+  <a class="next" href="0013-l2-02-conflict-types.html">下一课:L2-02 冲突的本质与分类 →</a>
+</div>
+
+</body>
+</html>

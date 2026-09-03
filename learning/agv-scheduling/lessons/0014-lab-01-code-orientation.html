@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LAB-01 · 代码导读:五次散步读下一个调度核心</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .try-it {
+    border: 2px dashed var(--accent);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    margin: 1.5rem 0;
+    background: #f7fbfd;
+  }
+  .try-it h4 { margin-top: 0; color: var(--accent); }
+  .station {
+    border: 1px solid var(--rule);
+    border-left: 5px solid #999;
+    border-radius: 6px;
+    padding: .4rem 1.2rem .8rem;
+    margin: 2rem 0;
+    background: #fcfcfa;
+  }
+  .station h2 { border-bottom: none; margin-top: 1.2rem; }
+  .station .station-head {
+    display: flex; align-items: baseline; gap: .8rem; flex-wrap: wrap;
+    font-size: .88rem; color: var(--muted); margin: .2rem 0 .6rem;
+  }
+  .station .station-head .files { font-family: Menlo, Consolas, monospace; }
+  .s1 { border-left-color: #0b6e99; }
+  .s2 { border-left-color: #b54708; }
+  .s3 { border-left-color: #5a8a2a; }
+  .s4 { border-left-color: #7c4dbd; }
+  .s5 { border-left-color: #555; }
+  details.cp {
+    background: var(--code-bg);
+    border-radius: 6px;
+    padding: .6rem 1rem;
+    margin: .8rem 0;
+  }
+  details.cp summary {
+    cursor: pointer; font-weight: 600; color: var(--accent);
+  }
+  details.cp[open] summary { margin-bottom: .4rem; }
+  .anchor-ref {
+    font-family: Menlo, Consolas, monospace;
+    font-size: .82em;
+    background: var(--code-bg);
+    padding: .05em .4em;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+
+<h1>LAB-01 · 代码导读:五次散步读下一个调度核心</h1>
+
+<div class="lesson-meta">
+  <span class="tag">实训课(插入于 L2-02 与 L2-03 之间)</span>
+  <span class="tag">难度:中</span>
+  <span class="tag">前置:L2-02</span>
+  <span class="tag">预计:5 次散步 × 35~45 分钟</span>
+</div>
+
+<div class="section-goal">
+<strong>🎯 这节课你将学会:</strong>不是新知识,而是<strong>把 L2-02 的理论钉进那 1917 行工业代码里</strong>。读完你能独立讲出两件事:<strong>一次 tick 的完整流水线</strong>,和<strong>一条预留从出生到死亡经过谁的手</strong>。这两件事讲得出来,这套架构你就真的拥有了——后面 L2-04 的 CBS 就是在这套代码上换规划器,地基必须先踩实。
+</div>
+
+<div class="callout">
+<span class="callout-title">关于"读起来吃力"</span>
+<p>这不是能力问题,是<strong>方法问题</strong>:1917 行工业代码本来就不该从第一个文件顺读到最后一个。你在后端世界里也不会 linear 读一个陌生服务——你会先跑起来、先看数据模型、先看测试。这节课就把那套直觉搬到调度代码上:<strong>一张地图、一条主线、五个检查点,分五次走完</strong>。每次散步只有 300~400 行核心代码,在 working memory 预算之内。</p>
+</div>
+
+<h2 id="method">先立心法:工业代码怎么读</h2>
+
+<ol>
+<li><strong>先跑再读。</strong>没见过运行的代码,读的是死的。第一件事永远是让 demo 和测试在你手里跑绿。</li>
+<li><strong>先名词,后动词。</strong><code>models.py</code> 里全是名词(Reservation、Vehicle、EdgeId),其他模块全是围绕这些名词的动词。名词不熟,动词全是天书。</li>
+<li><strong>自底向上按依赖读,不自顶向下按执行读。</strong>被依赖最多的(models)先读、读得最透;总指挥(scheduler_loop)最后读,那时它每一步调用的东西你都认识了。</li>
+<li><strong>测试当用法文档。</strong>36 个测试就是 36 个"这个类该怎么用、边界在哪"的例子,比任何文档都诚实。</li>
+<li><strong>带一条主线问题读。</strong>本课主线:<em>一条预留,从出生到死亡,经过谁的手?</em>每读一个模块,问自己"它对这条生命周期负责哪一段"。</li>
+<li><strong>时间盒 + 检查点。</strong>每次只走一站,做完检查点再走。贪多必噎。</li>
+</ol>
+
+<p>另外,代码里已经埋好了配套路标:💡 是学习点(对应课程哪一课)、🔑 是关键正确性、⚠️ 是踩过的坑。这次阅读它们就是你的导游。</p>
+
+<h2 id="map">地图:模块依赖与阅读顺序</h2>
+
+<figure class="svg-fig">
+<svg viewBox="0 0 660 505" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#8a8a8a"/>
+    </marker>
+  </defs>
+  <!-- 散步图例 -->
+  <g font-size="11">
+    <rect x="24" y="60" width="12" height="12" fill="#e7f2f8" stroke="#0b6e99" stroke-width="2"/>
+    <text x="42" y="70" fill="#333">散步1 · 数据层</text>
+    <rect x="24" y="84" width="12" height="12" fill="#fef3e2" stroke="#b54708" stroke-width="2"/>
+    <text x="42" y="94" fill="#333">散步2 · 预留表</text>
+    <rect x="24" y="108" width="12" height="12" fill="#f0f7e8" stroke="#5a8a2a" stroke-width="2"/>
+    <text x="42" y="118" fill="#333">散步3 · 快照规划</text>
+    <rect x="24" y="132" width="12" height="12" fill="#f3ecfa" stroke="#7c4dbd" stroke-width="2"/>
+    <text x="42" y="142" fill="#333">散步4 · 调度循环</text>
+    <rect x="24" y="156" width="12" height="12" fill="#eeeeee" stroke="#555" stroke-width="2"/>
+    <text x="42" y="166" fill="#333">散步5 · 仿真测试</text>
+  </g>
+
+  <!-- 依赖箭头(下层被依赖 → 上层使用者) -->
+  <g stroke="#8a8a8a" stroke-width="1.6" fill="none">
+    <line x1="280" y1="428" x2="130" y2="364" marker-end="url(#arr)"/>
+    <line x1="380" y1="428" x2="540" y2="364" marker-end="url(#arr)"/>
+    <line x1="345" y1="428" x2="390" y2="299" marker-end="url(#arr)"/>
+    <line x1="130" y1="322" x2="130" y2="274" marker-end="url(#arr)"/>
+    <line x1="405" y1="257" x2="405" y2="214" marker-end="url(#arr)"/>
+    <line x1="130" y1="232" x2="235" y2="129" marker-end="url(#arr)"/>
+    <line x1="405" y1="172" x2="400" y2="129" marker-end="url(#arr)"/>
+    <path d="M 486 254 C 570 215, 570 155, 470 128" marker-end="url(#arr)"/>
+    <line x1="330" y1="87" x2="330" y2="51" marker-end="url(#arr)"/>
+  </g>
+
+  <!-- 顶层:sim / tests -->
+  <rect x="150" y="10" width="360" height="40" fill="#eeeeee" stroke="#555" stroke-width="2" rx="6"/>
+  <text x="330" y="27" text-anchor="middle" font-size="12" font-weight="600" fill="#333">sim/ · tests/ · README</text>
+  <text x="330" y="42" text-anchor="middle" font-size="10" fill="#666">世界替身 · 行为规格(~700 行)</text>
+
+  <!-- scheduler_loop -->
+  <rect x="150" y="87" width="360" height="42" fill="#f3ecfa" stroke="#7c4dbd" stroke-width="2.5" rx="6"/>
+  <text x="330" y="104" text-anchor="middle" font-size="12" font-weight="600" fill="#4a2d75">scheduler_loop.py · 236 行</text>
+  <text x="330" y="119" text-anchor="middle" font-size="10" fill="#666">唯一写者:tick 流水线(散步4)</text>
+
+  <!-- planner -->
+  <rect x="320" y="172" width="170" height="42" fill="#f0f7e8" stroke="#5a8a2a" stroke-width="2.5" rx="6"/>
+  <text x="405" y="189" text-anchor="middle" font-size="12" font-weight="600" fill="#3d5f1d">planner.py · 286 行</text>
+  <text x="405" y="204" text-anchor="middle" font-size="10" fill="#666">时间扩展 A*(散步3)</text>
+
+  <!-- reservation_table -->
+  <rect x="40" y="232" width="180" height="42" fill="#fef3e2" stroke="#b54708" stroke-width="2.5" rx="6"/>
+  <text x="130" y="249" text-anchor="middle" font-size="12" font-weight="600" fill="#7a3105">reservation_table.py · 276 行</text>
+  <text x="130" y="264" text-anchor="middle" font-size="10" fill="#666">心脏:事务/租约/确认(散步2)</text>
+
+  <!-- snapshot -->
+  <rect x="320" y="257" width="170" height="42" fill="#f0f7e8" stroke="#5a8a2a" stroke-width="2.5" rx="6"/>
+  <text x="405" y="274" text-anchor="middle" font-size="12" font-weight="600" fill="#3d5f1d">snapshot.py · 56 行</text>
+  <text x="405" y="289" text-anchor="middle" font-size="10" fill="#666">不可变快照 + Graph(散步3)</text>
+
+  <!-- interval_index -->
+  <rect x="40" y="322" width="180" height="42" fill="#e7f2f8" stroke="#0b6e99" stroke-width="2.5" rx="6"/>
+  <text x="130" y="339" text-anchor="middle" font-size="12" font-weight="600" fill="#084560">interval_index.py · 132 行</text>
+  <text x="130" y="354" text-anchor="middle" font-size="10" fill="#666">区间树封装:三类冲突检测(散步1)</text>
+
+  <!-- metrics -->
+  <rect x="460" y="322" width="160" height="42" fill="#e7f2f8" stroke="#0b6e99" stroke-width="2" rx="6"/>
+  <text x="540" y="339" text-anchor="middle" font-size="12" font-weight="600" fill="#084560">metrics.py · 55 行</text>
+  <text x="540" y="354" text-anchor="middle" font-size="10" fill="#666">计数器(散步1 顺路)</text>
+
+  <!-- models -->
+  <rect x="210" y="428" width="240" height="44" fill="#e7f2f8" stroke="#0b6e99" stroke-width="3" rx="6"/>
+  <text x="330" y="446" text-anchor="middle" font-size="12.5" font-weight="600" fill="#084560">models.py · 213 行</text>
+  <text x="330" y="462" text-anchor="middle" font-size="10" fill="#666">全部值对象——被所有模块引用(散步1)</text>
+  <text x="330" y="494" text-anchor="middle" font-size="11" fill="#888">箭头 = import 方向(被依赖 → 使用者);颜色 = 所属散步(左上图例)</text>
+</svg>
+<figcaption>省略了部分引用线(models 被所有模块引用、metrics 的引用线等),只画主要链路。记住一个方向感:<strong>数据自下而上被加工,命令自上而下被执行</strong>。</figcaption>
+</figure>
+
+<p>换一套你更熟的语言——这套代码就是你写过的后端分层,只是领域换了:</p>
+
+<table>
+<thead><tr><th>代码模块</th><th>后端世界里的对应物</th></tr></thead>
+<tbody>
+<tr><td><code>models.py</code></td><td>DTO / 值对象层(Kotlin data class、Java record,全 frozen)</td></tr>
+<tr><td><code>interval_index.py</code></td><td>DAO 里的索引封装——顺便是第三方库(intervaltree)的<strong>防腐层</strong></td></tr>
+<tr><td><code>reservation_table.py</code></td><td>带事务语义的存储引擎(唯一写者,all-or-nothing)</td></tr>
+<tr><td><code>snapshot.py</code></td><td>读副本 / COW 视图,给计算侧一份一致快照</td></tr>
+<tr><td><code>planner.py</code></td><td>无状态计算服务(纯函数,进快照出轨迹)</td></tr>
+<tr><td><code>scheduler_loop.py</code></td><td>单线程事件循环(actor 模型的工业简化)</td></tr>
+<tr><td><code>sim/world.py</code></td><td>替掉真实 MQ / 设备层的<strong>测试替身</strong>(替身发心跳和 ack)</td></tr>
+<tr><td><code>tests/</code></td><td>行为规格——最诚实的用法文档</td></tr>
+</tbody>
+</table>
+
+<h2 id="lifecycle">主线:一条预留的一生</h2>
+
+<p>整堂课就追这一条线。后面每到一个模块,先定位"它负责这段生命的哪一步"。</p>
+
+<figure class="svg-fig">
+<svg viewBox="0 0 660 235" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arr2" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#555"/>
+    </marker>
+    <marker id="arr3" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#8a6d3b"/>
+    </marker>
+  </defs>
+
+  <!-- 出生 -->
+  <rect x="15" y="85" width="135" height="58" fill="#e7f2f8" stroke="#0b6e99" stroke-width="2" rx="6"/>
+  <text x="82" y="105" text-anchor="middle" font-size="12" font-weight="600" fill="#084560">出生(候选)</text>
+  <text x="82" y="122" text-anchor="middle" font-size="9.5" fill="#555">planner._build_</text>
+  <text x="82" y="134" text-anchor="middle" font-size="9.5" fill="#555">reservations(),rid=0</text>
+
+  <line x1="150" y1="114" x2="182" y2="114" stroke="#555" stroke-width="2" marker-end="url(#arr2)"/>
+
+  <!-- 入职 -->
+  <rect x="185" y="85" width="150" height="58" fill="#e7f2f8" stroke="#0b6e99" stroke-width="2.5" rx="6"/>
+  <text x="260" y="105" text-anchor="middle" font-size="12" font-weight="600" fill="#084560">入职(commit)</text>
+  <text x="260" y="122" text-anchor="middle" font-size="9.5" fill="#555">reserve_batch() 两阶段</text>
+  <text x="260" y="134" text-anchor="middle" font-size="9.5" fill="#555">检查全过 → 发 rid、写入</text>
+
+  <line x1="335" y1="114" x2="367" y2="114" stroke="#555" stroke-width="2" marker-end="url(#arr2)"/>
+
+  <!-- 活着 -->
+  <rect x="370" y="62" width="115" height="104" fill="#fcfcfa" stroke="#555" stroke-width="2.5" rx="6"/>
+  <text x="427" y="84" text-anchor="middle" font-size="12" font-weight="600" fill="#333">活在 live 表</text>
+  <text x="427" y="102" text-anchor="middle" font-size="9.5" fill="#666">谁在读:</text>
+  <text x="427" y="117" text-anchor="middle" font-size="9.5" fill="#666">下一辆车的 Planner</text>
+  <text x="427" y="130" text-anchor="middle" font-size="9.5" fill="#666">(经只读快照)</text>
+  <text x="427" y="147" text-anchor="middle" font-size="9.5" fill="#666">VehicleMover</text>
+  <text x="427" y="158" text-anchor="middle" font-size="9.5" fill="#666">(翻译成上报+确认)</text>
+
+  <!-- 四种退场 -->
+  <line x1="485" y1="90" x2="517" y2="42" stroke="#8a6d3b" stroke-width="1.6" marker-end="url(#arr3)"/>
+  <line x1="485" y1="108" x2="517" y2="94" stroke="#8a6d3b" stroke-width="1.6" marker-end="url(#arr3)"/>
+  <line x1="485" y1="126" x2="517" y2="146" stroke="#8a6d3b" stroke-width="1.6" marker-end="url(#arr3)"/>
+  <line x1="485" y1="140" x2="517" y2="198" stroke="#8a6d3b" stroke-width="1.6" marker-end="url(#arr3)"/>
+
+  <rect x="520" y="20" width="128" height="44" fill="#f0f7e8" stroke="#5a8a2a" stroke-width="2" rx="6"/>
+  <text x="584" y="37" text-anchor="middle" font-size="10.5" font-weight="600" fill="#3d5f1d">confirm_passed()</text>
+  <text x="584" y="52" text-anchor="middle" font-size="9" fill="#666">ack:正常退役 ✅</text>
+
+  <rect x="520" y="72" width="128" height="44" fill="#fef3e2" stroke="#b54708" stroke-width="2" rx="6"/>
+  <text x="584" y="89" text-anchor="middle" font-size="10.5" font-weight="600" fill="#7a3105">expire_stale()</text>
+  <text x="584" y="104" text-anchor="middle" font-size="9" fill="#666">租约兜底:车失联 ⏰</text>
+
+  <rect x="520" y="124" width="128" height="44" fill="#e7f2f8" stroke="#0b6e99" stroke-width="2" rx="6"/>
+  <text x="584" y="141" text-anchor="middle" font-size="10.5" font-weight="600" fill="#084560">rollback()</text>
+  <text x="584" y="156" text-anchor="middle" font-size="9" fill="#666">重规划:撤销旧计划 ↺</text>
+
+  <rect x="520" y="176" width="128" height="44" fill="#fde8e8" stroke="#a33" stroke-width="2" rx="6"/>
+  <text x="584" y="193" text-anchor="middle" font-size="10.5" font-weight="600" fill="#7a2020">release_agent()</text>
+  <text x="584" y="208" text-anchor="middle" font-size="9" fill="#7a2020">掉线:全部清场 ✖</text>
+
+  <text x="300" y="225" text-anchor="middle" font-size="10.5" fill="#888" font-style="italic">四种退场对应四种真实世界事件:正常走完 / 车挂了没 ack / 计划被更好的取代 / 车彻底掉线</text>
+</svg>
+<figcaption>一条预留的生命周期——也是整个系统的骨架图。散步 2 结束时,你应该能不看此图复述它。</figcaption>
+</figure>
+
+<!-- ================================================== -->
+<div class="station s1">
+<h2>散步 1 · 先跑,再读数据层</h2>
+<div class="station-head">
+  <span>⏱ 45 分钟</span>
+  <span class="files">sim/demo.py → models.py(213 行)→ interval_index.py(132 行)→ metrics.py(55 行)</span>
+</div>
+
+<h3>第一步:亲手跑绿(10 分钟)</h3>
+<pre><code>cd code
+uv run python -m sim.demo    # 端到端:三车避让 + 掉线重规划
+uv run pytest -q             # 36 个测试全绿</code></pre>
+<p>看 demo 输出时盯三个东西:<strong>(1)</strong> 场景 1 里 <code>V3 状态=等待让路(waiting)</code>——最低优先级车在让路,这就是 L2-02 说的优先级避让;<strong>(2)</strong> 每行开头的 <code>活跃预留</code>——live 表里的预留条数,车动它就变;<strong>(3)</strong> 场景 2 里 V2 掉线后 V3 的重规划。(输出标签是中文,括号里保留英文名词,方便和代码里的枚举/指标一一对应。)</p>
+
+<p>输出里的 <code>entry / main / jA / sh1 …</code> 就是下面这张图——demo 的全部世界,7 个节点、7 条双向边,定义在 <span class="anchor-ref">sim/world.py:25</span> 的 <code>MAP_ADJ</code>(就是你 L1 手算最短路的那张仓库图):</p>
+
+<figure class="svg-fig">
+<svg viewBox="0 0 560 330" xmlns="http://www.w3.org/2000/svg">
+  <text x="280" y="20" text-anchor="middle" font-size="12.5" font-weight="600" fill="#444">demo 地图(MAP_ADJ):7 节点仓库,边上数字 = 通行时间(秒)</text>
+
+  <!-- 边 -->
+  <g stroke="#999" stroke-width="2">
+    <line x1="180" y1="57"  x2="180" y2="118"/>
+    <line x1="166" y1="145" x2="94"  y2="200"/>
+    <line x1="194" y1="145" x2="266" y2="200"/>
+    <line x1="80"  y1="227" x2="80"  y2="268"/>
+    <line x1="280" y1="227" x2="280" y2="268"/>
+    <line x1="296" y1="217" x2="434" y2="278"/>
+    <line x1="297" y1="285" x2="433" y2="285"/>
+  </g>
+  <!-- 边权 = 通行秒数 -->
+  <g font-size="11" font-weight="600" fill="#b54708">
+    <text x="190" y="92">5</text>
+    <text x="122" y="164">3</text>
+    <text x="238" y="164">6</text>
+    <text x="92"  y="250">4</text>
+    <text x="292" y="250">2</text>
+    <text x="365" y="240">7</text>
+    <text x="365" y="274">3</text>
+  </g>
+
+  <!-- 节点 -->
+  <g>
+    <circle cx="180" cy="40"  r="17" fill="#fff" stroke="#0b6e99" stroke-width="2.5"/>
+    <text x="180" y="44"  text-anchor="middle" font-size="11" font-weight="600" fill="#1a1a1a">entry</text>
+    <text x="150" y="36"  text-anchor="end" font-size="9" fill="#999">入口</text>
+
+    <circle cx="180" cy="135" r="17" fill="#fff" stroke="#0b6e99" stroke-width="2.5"/>
+    <text x="180" y="139" text-anchor="middle" font-size="11" font-weight="600" fill="#1a1a1a">main</text>
+    <text x="205" y="130" font-size="9" fill="#999">主道</text>
+
+    <circle cx="80"  cy="210" r="17" fill="#fff" stroke="#0b6e99" stroke-width="2.5"/>
+    <text x="80"  y="214" text-anchor="middle" font-size="11" font-weight="600" fill="#1a1a1a">jA</text>
+    <text x="57"  y="196" text-anchor="end" font-size="9" fill="#999">岔口A</text>
+
+    <circle cx="280" cy="210" r="17" fill="#fff" stroke="#0b6e99" stroke-width="2.5"/>
+    <text x="280" y="214" text-anchor="middle" font-size="11" font-weight="600" fill="#1a1a1a">jB</text>
+    <text x="303" y="196" font-size="9" fill="#999">岔口B</text>
+
+    <circle cx="80"  cy="285" r="17" fill="#fff" stroke="#0b6e99" stroke-width="2.5"/>
+    <text x="80"  y="289" text-anchor="middle" font-size="11" font-weight="600" fill="#1a1a1a">sh1</text>
+    <text x="80"  y="315" text-anchor="middle" font-size="9" fill="#999">货架1</text>
+
+    <circle cx="280" cy="285" r="17" fill="#fff" stroke="#0b6e99" stroke-width="2.5"/>
+    <text x="280" y="289" text-anchor="middle" font-size="11" font-weight="600" fill="#1a1a1a">sh2</text>
+    <text x="280" y="315" text-anchor="middle" font-size="9" fill="#999">货架2</text>
+
+    <circle cx="450" cy="285" r="17" fill="#fff" stroke="#0b6e99" stroke-width="2.5"/>
+    <text x="450" y="289" text-anchor="middle" font-size="11" font-weight="600" fill="#1a1a1a">sh3</text>
+    <text x="450" y="315" text-anchor="middle" font-size="9" fill="#999">货架3</text>
+  </g>
+
+  <!-- 场景 1 出发位置 -->
+  <g>
+    <rect x="204" y="32" width="24" height="15" rx="2" fill="#0b6e99"/>
+    <text x="216" y="43" text-anchor="middle" font-size="9" fill="#fff">V1</text>
+    <rect x="36" y="277" width="24" height="15" rx="2" fill="#5a8a2a"/>
+    <text x="48" y="288" text-anchor="middle" font-size="9" fill="#fff">V2</text>
+    <rect x="478" y="277" width="24" height="15" rx="2" fill="#b54708"/>
+    <text x="490" y="288" text-anchor="middle" font-size="9" fill="#fff">V3</text>
+  </g>
+</svg>
+<figcaption>边上的数字是<strong>通行时间(秒)</strong>,不是几何距离——"距离 ÷ 速度"发生在建图时(L2-02 讲过),调度器看到的世界已经是时间。所有边双向可通行(<code>MAP_ADJ</code> 里每个方向各登记一次、同权)。场景 1 出发:V1@entry→sh3(蓝)、V2@sh1→entry(绿)、V3@sh3→sh1(橙)。</figcaption>
+</figure>
+
+<h3>第二步:models.py 全读(20 分钟)</h3>
+<p>这是数据字典,全是名词,不熟它后面全是天书。逐个过:</p>
+<ul>
+<li><code>Reservation</code>(<span class="anchor-ref">models.py:62</span>)——<strong>全系统的原子</strong>:"智能体 X 在 [t_start, t_end) 占用资源 R"。七个字段里两个值得停下来想:<code>lease_deadline</code>(租约,散步 2 的主角)和 <code>rid=0</code>(注释写了:0 表示尚未提交)。</li>
+<li><code>EdgeId</code>(<span class="anchor-ref">models.py:40</span>)——边是<strong>有序</strong>的,<code>.reversed</code> 属性(<span class="anchor-ref">models.py:51</span>)一行就实现了"A→B 和 B→A 是两个资源"。这一行是检测对向冲突的全部根基。</li>
+<li><code>ConflictType</code>(<span class="anchor-ref">models.py:116</span>)——L2-02 的冲突分类在这里落地成枚举。</li>
+<li><code>Vehicle</code>(<span class="anchor-ref">models.py:189</span>)——注意 <code>last_heartbeat=-1.0</code> 的<strong>哨兵</strong>设计:为什么用 -1 不用 0?(因为第一次上报的时刻可以就是 0.0。)</li>
+<li><code>Trajectory</code> / <code>TimedPoint</code>(<span class="anchor-ref">models.py:148</span>)——L2-02 算的那种"节点序列 + 到达时刻",docstring 明确说了它和运动学轨迹的分界。</li>
+</ul>
+<p><strong>可跳过</strong>:<code>Task</code> 类(demo 尚未用任务队列)。</p>
+
+<h3>第三步:interval_index.py(10 分钟)+ metrics.py 顺路(5 分钟)</h3>
+<p>只看一个方法:<code>overlaps()</code>(<span class="anchor-ref">interval_index.py:58</span>)。它是冲突检测的全部逻辑,分三支:节点桶 → VERTEX;同向边桶 → FOLLOWING/EDGE;反向桶(<span class="anchor-ref">interval_index.py:109</span> 的 <code>rev_key</code>)→ SWAPPING。为什么包一层而不直接用 intervaltree?——防腐层:第三方库的 API 不泄漏到上层,将来换实现只改这一个文件。<code>metrics.py</code> 是 55 行计数器,扫一眼即可。</p>
+
+<details class="cp">
+<summary>检查点 1.1:EdgeId("A","B") 和 EdgeId("B","A") 是同一个资源吗?这个设计为什么关键?</summary>
+<p>不是,是两个不同资源。正因为分开,同一时间段两条都被占用时,查反向桶才能发现"两车在同一条物理路段上迎面而行"(SWAPPING)。如果边是无向的、A→B 和 B→A 共用一个键,就分不清"相向"和"同向",对向冲突会漏检——工业上干脆用单行道根治它,也是同一个认识。</p>
+</details>
+
+<details class="cp">
+<summary>检查点 1.2:Reservation 为什么必须是 frozen(不可变)?</summary>
+<p>因为它要被 live 表和快照<strong>共享</strong>。快照拷贝区间树时,payload(Reservation 对象)是直接共享的(interval_index.copy 的注释写了这点)。如果对象可变,主循环原地改一个字段,规划线程手里的"冻结"快照就被偷偷改了——COW 的前提是 payload 本身不可变。所以改字段必须 <code>replace()</code> 生成新实例(reserve_batch 里就是这么填租约的)。</p>
+</details>
+
+<div class="try-it">
+<h4>🔧 动手 1(本站必做):心算 + 验证预留条数</h4>
+<p>V1 要从 <code>entry</code> 去 <code>sh3</code>。规则在 <code>_build_reservations</code>(<span class="anchor-ref">planner.py:240</span>):<strong>每一跳一条 EDGE 预留,每个到访节点一个 NODE dwell</strong>。请先回答两个问题(笔算,别跑):</p>
+<ol>
+<li>规划器会选哪条路?(地图在 <span class="anchor-ref">sim/world.py:25</span>,就是你 L1 手算过的那张)</li>
+<li>这条路一共产生几条预留?</li>
+</ol>
+<p>然后跑这段验证:</p>
+<pre><code>cd code &amp;&amp; uv run python - &lt;&lt;'EOF'
+from scheduler.models import Vehicle
+from sim.world import build_loop
+
+loop = build_loop()
+loop.add_vehicle(Vehicle(vid="V1", node="entry", priority=3, last_heartbeat=0.0))
+loop.assign_goal("V1", "sh3")
+loop.tick()                     # 第一次 tick 触发规划
+
+for r in loop.table.reservations_for("V1"):
+    print(r.rid, r.kind.value, r.resource_key, f"[{r.t_start:.1f},{r.t_end:.1f})")
+print("total =", len(loop.table.reservations_for("V1")))
+EOF</code></pre>
+<details class="cp">
+<summary>对答案(先自己算再看)</summary>
+<p>路线:<code>entry→main→jB→sh2→sh3</code>(总耗时 5+6+2+3=16s;直达 jB→sh3 要 7s,绕 sh2 只要 2+3=5s,规划器选绕行)。4 跳 → 4 条 EDGE + 5 个节点 dwell = <strong>9 条预留</strong>,到达时刻 t=17(从 t=1 起步)。上面这段的输出就是这 9 条,rid 从 1 到 9——这就是"一条轨迹 = 一批预留"的实体感。</p>
+</details>
+</div>
+</div>
+
+<!-- ================================================== -->
+<div class="station s2">
+<h2>散步 2 · reservation_table.py:心脏(全课最重要的一站)</h2>
+<div class="station-head">
+  <span>⏱ 40 分钟</span>
+  <span class="files">scheduler/reservation_table.py(276 行)</span>
+</div>
+
+<p>先读模块 docstring(<span class="anchor-ref">reservation_table.py:1</span>)——它列出了全部公开操作,正好是"预留的一生"的中后段。然后按这个顺序精读五个操作:</p>
+
+<ol>
+<li><code>reserve_batch</code>(<span class="anchor-ref">reservation_table.py:88</span>)——<strong>事务性提交</strong>。难点在两阶段检查(<span class="anchor-ref">reservation_table.py:126</span>):① 对已提交索引查;② 对<strong>批内已接受成员</strong>查(防自冲突)。建议读两遍,第二遍问自己:如果少了第②步,什么会坏?(同一轨迹的两个预留各自通过检查、互相矛盾地进表。)</li>
+<li><code>confirm_passed</code>(<span class="anchor-ref">reservation_table.py:188</span>)——ack 机制。docstring 里那句"这是区分正常完成和异常停滞的唯一可靠信号"是血泪:开发时踩过的坑就源于此。</li>
+<li><code>expire_stale</code>(<span class="anchor-ref">reservation_table.py:207</span>)——⚠️ 注释(<span class="anchor-ref">reservation_table.py:212</span>)必读:<strong>只按 lease_deadline 判,绝不按 t_end 判</strong>。下面动手 2 就是让你亲手把这个坑重新踩一遍。</li>
+<li><code>release_agent</code>(<span class="anchor-ref">reservation_table.py:233</span>)——掉线清场,最短。</li>
+<li><code>rollback</code>(<span class="anchor-ref">reservation_table.py:241</span>)——按 rid 精确撤销一个已提交批次,供滚动重规划用。</li>
+</ol>
+<p><strong>可跳过</strong>:<code>_bump_conflict_metrics</code>(纯计数)。<strong>值得注意</strong>:提交阶段(<span class="anchor-ref">reservation_table.py:172</span>)的注释解释了为什么不需要"失败反向删除"的补偿路径——因为检查全过才动手写,且 <code>index.add</code> 对合法区间不会失败。事务的回滚是<strong>靠不写实现的</strong>,不是靠写了再删。</p>
+
+<details class="cp">
+<summary>检查点 2.1:为什么绝不按 t_end 判失效?误清的连锁反应是什么?</summary>
+<p>t_end 只是"预期离开时间"。车可能正常驶过、只是上报(ack)还在路上(comms 滞后)。若按 t_end 判:正常车的预留被误清 → 车进 <code>reaped</code> 名单 → 被标 dirty → 每 tick 重规划 → 每 tick 又被清……车永远停在起点。<strong>租约(= t_end + 5s 余量)才是"真的出问题了"的可靠信号</strong>。</p>
+</details>
+
+<details class="cp">
+<summary>检查点 2.2:t_end 已过但未确认的残留预留,为什么不会误挡未来规划?</summary>
+<p>未来候选的时间窗 <code>t_start ≥ now ≥ 残留的 t_end</code>,半开区间 [a,b) 在 <code>b ≤ c</code> 时不可能与 [c,d) 重叠(<code>overlaps_time</code> 的实现就是这句话)。所以留着等 confirm 是安全的;车真挂了,租约兜底。这是"宁可慢半拍,不可错杀"的容错取向。</p>
+</details>
+
+<div class="try-it">
+<h4>🔧 动手 2(本站重头戏):亲手重现租约 bug</h4>
+<p>把 <span class="anchor-ref">reservation_table.py:225</span> 的</p>
+<pre><code>if r.lease_deadline &lt;= now:</code></pre>
+<p>改成</p>
+<pre><code>if r.t_end &lt;= now:</code></pre>
+<p>然后 <code>uv run python -m sim.demo</code>。预期现象(我已替你踩过一遍):从 t=2.0 起<strong>每 tick</strong> 都出现 <code>过期清理=['V1','V2']</code> + <code>重规划=['V1','V2']</code>,而 V1 的位置永远是 <code>entry</code>、V2 永远是 <code>sh1</code>——全场冻住,对向(节点/对向/跟随里的第二位)冲突计数一路攀升。看懂这个惨状,你就永远记得租约为什么存在。</p>
+<p><strong>看完必须改回来</strong>(把那一行改回 <code>lease_deadline</code>),然后 <code>uv run pytest -q</code> 确认 36 个测试回绿。<em>注意:code/ 目录当前不在 git 跟踪里,没有 checkout 后悔药,改回来靠手动。</em></p>
+</div>
+</div>
+
+<!-- ================================================== -->
+<div class="station s3">
+<h2>散步 3 · snapshot.py + planner.py:快照与规划器</h2>
+<div class="station-head">
+  <span>⏱ 45 分钟</span>
+  <span class="files">scheduler/snapshot.py(56 行)→ scheduler/planner.py(286 行)</span>
+</div>
+
+<p><code>snapshot.py</code> 只有 56 行:一个 <code>Graph</code>(邻接表,你 L1-01 建的图就是它)+ 一个 <code>Snapshot</code>(时钟、图、车队、<strong>预留索引的私有副本</strong>、horizon)。它的全部意义在 docstring:<strong>规划线程只读快照,绝不碰 live 表</strong>。</p>
+
+<p><code>planner.py</code> 只需要读两个灵魂方法 + 一个诚实声明:</p>
+<ol>
+<li><code>plan()</code> 主循环(<span class="anchor-ref">planner.py:77</span>)——状态是 <strong>(节点, 时间)</strong>,这就是 L1-04 的 A* 升级成时间扩展 A*。两种族动作:<strong>过边</strong>(候选预留构造在 <span class="anchor-ref">planner.py:125</span>——每一步都现场造 EDGE+NODE 两条预留去查表)和 <strong>wait</strong>(<span class="anchor-ref">planner.py:152</span>——原地等一拍,低优先级让路的机制)。</li>
+<li><code>_conflicts_others</code>(<span class="anchor-ref">planner.py:176</span>)——只和别人冲突,忽略自己。为什么?docstring 给了答案,和主循环"先 rollback 再重规划"是配套的。</li>
+<li><code>h 恒 0</code>(<span class="anchor-ref">planner.py:190</span> ~ <span class="anchor-ref">planner.py:200</span>)——诚实声明:现在退化成 Dijkstra。正确性不受影响,只是慢。工业版怎么做,docstring 里写了方案(反向 BFS 预计算跳数),也是本课综合挑战。</li>
+</ol>
+<p><strong>必读</strong>:文件底部 <code>prioritize_and_plan</code>(<span class="anchor-ref">planner.py:265</span>)的 ⚠️ docstring——它解释了为什么主循环<strong>不</strong>用它(固定快照不跨智能体一致),这是理解散步 4 的钥匙。<strong>可跳过</strong>:<code>_reconstruct</code>、<code>_cheapest_edge</code>(机械辅助)。</p>
+
+<details class="cp">
+<summary>检查点 3.1:规划时为什么要忽略自己的预留?</summary>
+<p>重规划时,新轨迹本来就要覆盖旧轨迹的时空——主循环会先 rollback 旧计划再规划新的。如果不忽略自己,新车速轨迹会和"自己还没被撤销的旧预留"冲突,规划永远失败。后端类比:事务和自己未提交的数据不算冲突。</p>
+</details>
+
+<details class="cp">
+<summary>检查点 3.2:prioritize_and_plan 的输出为什么不能直接 commit?</summary>
+<p>所有智能体共用同一张固定快照,彼此<strong>看不到对方的候选计划</strong>——两个车可能都规划进同一个空闲时空格,同时提交就是重复占位。要么每接纳一个计划就落表、给下一辆重拍快照(主循环的做法),要么中心式消解冲突(CBS,L2-04)。这个函数只是教学/诊断用。</p>
+</details>
+
+<div class="try-it">
+<h4>🔧 动手 3(可选,5 分钟):对调优先级,看谁变成等待者</h4>
+<p>把 <span class="anchor-ref">sim/scenarios.py:33</span> 和 <span class="anchor-ref">sim/scenarios.py:35</span> 里 V1 和 V3 的 <code>priority=3</code> / <code>priority=1</code> 对调,重跑 demo:等路的人从 V3 换成了别人。看完改回。这一个对调能让你具体感到"优先级排序"(<span class="anchor-ref">scheduler_loop.py:163</span>)怎么决定谁让谁。</p>
+</div>
+</div>
+
+<!-- ================================================== -->
+<div class="station s4">
+<h2>散步 4 · scheduler_loop.py:总指挥</h2>
+<div class="station-head">
+  <span>⏱ 35 分钟</span>
+  <span class="files">scheduler/scheduler_loop.py(236 行)</span>
+</div>
+
+<p>读这一个文件就读一个方法:<code>tick()</code>(<span class="anchor-ref">scheduler_loop.py:108</span>)。它是唯一写者,一条 tick 流水线(行号为锚):</p>
+<ol>
+<li>时钟推进 dt(<span class="anchor-ref">scheduler_loop.py:114</span>)——<strong>调度拥有时钟,不读墙钟</strong>,所以测试是确定性的;</li>
+<li>摄入上报 + 确认(<span class="anchor-ref">scheduler_loop.py:117</span>)——注意确认转手就调了散步 2 的 <code>confirm_passed</code>;</li>
+<li>离线检测(<span class="anchor-ref">scheduler_loop.py:131</span>)——哨兵判定 <code>last_heartbeat &gt;= 0</code> 在 <span class="anchor-ref">scheduler_loop.py:135</span>,超时则 <code>release_agent</code>;</li>
+<li>清租约(<span class="anchor-ref">scheduler_loop.py:142</span>)——被清的车进 reaped 名单;</li>
+<li>标 dirty(<span class="anchor-ref">scheduler_loop.py:151</span>)——只有两类车重算:被清理过的、有目标却没计划的;<strong>按优先级排序</strong>(<span class="anchor-ref">scheduler_loop.py:163</span>);</li>
+<li>逐车重规划:先 rollback 旧计划(<span class="anchor-ref">scheduler_loop.py:176</span>)→ <strong>重拍快照</strong>(<span class="anchor-ref">scheduler_loop.py:182</span>)→ 规划 → commit(<span class="anchor-ref">scheduler_loop.py:192</span>);规划失败标 WAITING 下 tick 再试(<span class="anchor-ref">scheduler_loop.py:190</span>);</li>
+<li>到达清目标(<span class="anchor-ref">scheduler_loop.py:206</span>)。</li>
+</ol>
+
+<figure class="svg-fig">
+<svg viewBox="0 0 640 220" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arr4" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#7c4dbd"/>
+    </marker>
+    <marker id="arr5" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#5a8a2a"/>
+    </marker>
+  </defs>
+
+  <rect x="20" y="25" width="260" height="170" fill="#f9f6fd" stroke="#7c4dbd" stroke-width="2.5" rx="8"/>
+  <text x="150" y="50" text-anchor="middle" font-size="12.5" font-weight="600" fill="#4a2d75">SchedulerLoop — 唯一写者(单线程)</text>
+  <rect x="40" y="70" width="220" height="42" fill="#fff" stroke="#7c4dbd" stroke-width="1.5" rx="5"/>
+  <text x="150" y="88" text-anchor="middle" font-size="11" fill="#333">live ReservationTable(可变)</text>
+  <text x="150" y="103" text-anchor="middle" font-size="9.5" fill="#777">唯一被允许写它的手</text>
+  <rect x="40" y="125" width="220" height="42" fill="#fff" stroke="#7c4dbd" stroke-width="1.5" rx="5"/>
+  <text x="150" y="143" text-anchor="middle" font-size="11" fill="#333">fleet / goals / active_rids(可变)</text>
+  <text x="150" y="158" text-anchor="middle" font-size="9.5" fill="#777">车队实时状态与簿记</text>
+
+  <rect x="400" y="45" width="205" height="130" fill="#f4f9ee" stroke="#5a8a2a" stroke-width="2.5" rx="8"/>
+  <text x="502" y="70" text-anchor="middle" font-size="12.5" font-weight="600" fill="#3d5f1d">Planner — 纯函数</text>
+  <rect x="418" y="85" width="170" height="40" fill="#fff" stroke="#5a8a2a" stroke-width="1.5" stroke-dasharray="4 3" rx="5"/>
+  <text x="503" y="102" text-anchor="middle" font-size="11" fill="#333">Snapshot(冻结副本)</text>
+  <text x="503" y="117" text-anchor="middle" font-size="9.5" fill="#777">只读,绝不碰 live 表</text>
+  <text x="502" y="145" text-anchor="middle" font-size="10" fill="#555">时间扩展 A*:进快照,</text>
+  <text x="502" y="160" text-anchor="middle" font-size="10" fill="#555">出 Trajectory + 候选预留</text>
+
+  <line x1="280" y1="80" x2="397" y2="80" stroke="#7c4dbd" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arr4)"/>
+  <text x="338" y="70" text-anchor="middle" font-size="9.5" fill="#7c4dbd">拍快照 _snapshot()</text>
+  <text x="338" y="95" text-anchor="middle" font-size="9" fill="#999">(COW 拷贝区间树)</text>
+
+  <line x1="397" y1="150" x2="283" y2="150" stroke="#5a8a2a" stroke-width="2" marker-end="url(#arr5)"/>
+  <text x="345" y="140" text-anchor="middle" font-size="9.5" fill="#5a8a2a">PlanResult.proposed</text>
+  <text x="340" y="165" text-anchor="middle" font-size="9" fill="#999">(候选预留批次)</text>
+
+  <text x="320" y="212" text-anchor="middle" font-size="10.5" fill="#888" font-style="italic">规划期间 live 表随便变,快照纹丝不动 → 无锁、无竞态、最坏只是读到略旧数据</text>
+</svg>
+<figcaption>单写者 + COW 快照——整套架构并发正确性的全部秘密。每辆车规划前重拍快照,就是让它看到上一辆(更高优先级)刚 commit 的预留。</figcaption>
+</figure>
+
+<div class="backend-analogy">
+这个模型你其实天天在用:<strong>单写者 = 单线程 event loop</strong>(Node/Redis 的并发哲学:一个线程改状态,重活丢给别处);<strong>每车规划前重拍快照 = 读已提交(read committed)</strong>——每个事务开始时读最新的已提交状态,绝不读半截数据。规划器则是<strong>无状态计算服务</strong>:不持有任何状态,进快照、出结果,天然可以水平扩到线程池(README 诚实声明了:架构支持,demo 未实际并发)。
+</div>
+
+<details class="cp">
+<summary>检查点 4.1:为什么每辆车规划前要重新拍快照,而不是全队共用一张?</summary>
+<p>因为第 1 辆(最高优先级)刚把它的轨迹 commit 进了 live 表。第 2 辆必须<strong>看到这份新提交</strong>才能正确避让;如果还用 tick 开头拍的旧快照,两辆车会"各自以为某时空空闲"而撞车——这正是 planner.py 底部 prioritize_and_plan 警告的那个问题,主循环用"每车 re-snapshot"这一步根治了它。代价是每车一次区间树拷贝,换来正确性,值。</p>
+</details>
+</div>
+
+<!-- ================================================== -->
+<div class="station s5">
+<h2>散步 5 · sim/ 与 tests/:世界替身与行为规格</h2>
+<div class="station-head">
+  <span>⏱ 40 分钟</span>
+  <span class="files">sim/world.py(94 行)→ sim/scenarios.py(90 行)→ tests/(5 文件 36 测试)</span>
+</div>
+
+<p><code>sim/world.py</code> 只有一件聪明事:<code>VehicleMover</code>(<span class="anchor-ref">sim/world.py:48</span>)是<strong>物理世界的替身</strong>——它把已提交的预留反向翻译成 <code>PositionReport</code>(心跳+位置)和 <code>Confirmation</code>(ack),喂回 tick 的入参。真车里这两样东西来自车载控制器经通信层上报,VDA5050(L3-03)讲的就是那条链路。</p>
+
+<p>这里藏着散步 2 的深层答案:<code>reports_for</code> 只对 <strong>NODE</strong> 预留发确认(<span class="anchor-ref">sim/world.py:83</span>)。EDGE 预留<strong>永远没人逐条 ack</strong>——已走完的边留在表里无害(检查点 2.2 讲过为什么),它的退场要么等车辆到达/重规划时的整批 <code>rollback</code>,要么靠租约到期。你重读 expire_stale 时应该有"原来如此"感:租约不是防呆冗余——对边预留来说,它是唯一<strong>逐条、及时</strong>的清理机制。</p>
+
+<p><code>sim/scenarios.py</code>:场景 1(<span class="anchor-ref">sim/scenarios.py:31</span>)三车汇合避让;场景 2(<span class="anchor-ref">sim/scenarios.py:58</span>)V2 掉线→释放→重分配。</p>
+
+<p><strong>tests/ 按这个顺序读,每个测试函数名就是一条规格</strong>:</p>
+<ol>
+<li><code>test_reservation.py</code> —— 表的基本契约 + <strong>事务原子性</strong>(中途冲突整批回滚);</li>
+<li><code>test_lifecycle.py</code> —— confirm → lease 过期 → release 的完整链路;</li>
+<li><code>test_snapshot.py</code> —— 钉死"规划期间主循环改表,快照纹丝不动"的隔离性;</li>
+<li><code>test_planner.py</code> —— 时间扩展 A* 的正确性 + wait 避让;</li>
+<li><code>test_anomaly.py</code> —— 掉线/超时/死车 → 重规划,最有戏的一份。</li>
+</ol>
+
+<details class="cp">
+<summary>检查点 5.1:VehicleMover 发的 Confirmation,本质上替真实系统里的什么?</summary>
+<p>车端上报的"我已离开资源 R"——真实系统里这是车载控制器过完一个节点/路段后,经通信层发给调度的心跳附带信息(或独立消息)。它和 PositionReport 一起,构成调度感知世界的全部输入。没有它,调度无法区分"正常走完"和"卡死不动"(散步 2 的核心教训)。</p>
+</details>
+
+<div class="try-it">
+<h4>🏆 综合挑战(通往 L2-04,做完这两个你就有资格说"这套代码是我的")</h4>
+<ol>
+<li><strong>给 _h 装上真启发</strong>:按 docstring 的方案(<span class="anchor-ref">planner.py:190</span>)做一次反向 BFS,预计算每个节点到目标的跳数下界,让 h &gt; 0 变成真 A*。在 demo 的地图上对比规划耗时/扩展状态数的变化——亲手验证 L1-04 的铁律(A* ≤ Dijkstra)在时间扩展图上依然成立。</li>
+<li><strong>把现象写成规格</strong>:给"低优先级车在场景 1 会让路"写一个断言测试,变成第 37 个测试。写不出断言,说明还没真读懂;写出来了,你就同时练了"从现象到规格"的工程闭环。</li>
+</ol>
+</div>
+</div>
+
+<!-- ================================================== -->
+<h2 id="faq">常见追问(读代码时几乎一定会问的两个问题)</h2>
+
+<h3>追问一:时间窗口是怎么划分的?移动要多少个窗口,是路径长度 ÷ 速度吗?</h3>
+
+<p><strong>一半对,一半不对。</strong>"距离 ÷ 速度"确实存在,但它发生在<strong>建图的时候</strong>,不在调度运行时:</p>
+
+<ol>
+<li><strong>边权就是时间。</strong><code>Graph.adj</code>(<span class="anchor-ref">snapshot.py:27</span>)里每条边带的不是米,而是"过这条边要几秒"(<code>MAP_ADJ</code> 里的 5.0、3.0…)。建图时人已经替你做了 距离÷速度=时间(L2-02 的公式)。所以规划器<strong>从不知道"速度"这个概念</strong>,它看到的世界已经是时间;要改车速或表达拥堵,改边权就行(这就是 L1-01 埋的"动态权重"伏笔)。</li>
+<li><strong>没有预先划分的全局时间格子。</strong>这套代码的时间窗不是把时间轴切成一格格再数格子,而是<strong>每次移动时现场生成的连续半开区间</strong> [t_start, t_end)。规划时只有一句累加:到达时刻 = 出发时刻 + 边权(<span class="anchor-ref">planner.py:116</span>)。</li>
+<li><strong>一次移动产生几个窗?</strong>过一条边 = 2 条:EDGE [出发, 到达) + 到达节点的 NODE dwell [到达, 到达+1s)。整条路径 = 跳数 条 EDGE + (跳数+1) 个 NODE dwell——动手 1 的 9 条就是这么来的。</li>
+</ol>
+
+<table>
+<thead><tr><th>动作</th><th>生成的窗口</th><th>窗口长度</th></tr></thead>
+<tbody>
+<tr><td>过边 A→B</td><td>1 条 EDGE [t, t+通行时间)</td><td>边权(建图时定)</td></tr>
+<tr><td>到达节点 B</td><td>1 条 NODE [t′, t′+node_dwell)</td><td>node_dwell,默认 1s(路口减速占用)</td></tr>
+<tr><td>原地等待</td><td>1 条 NODE [t, t+time_step)</td><td>time_step,默认 1s</td></tr>
+</tbody>
+</table>
+
+<p>唯一的"离散粒度"是 wait:只能整拍整拍地等(time_step),因为搜索状态 (节点, 时刻) 必须可枚举。也有的工业实现反过来把整个时间轴量化成固定槽位(slotted time),实现更简单但会浪费槽内碎片——本代码选了连续时间窗,更接近真实。</p>
+
+<h3>追问二:车延迟了、甚至坏在半路,预留表怎么处理?</h3>
+
+<p>分两种情况,防线不同:</p>
+
+<p><strong>情况 A:只是慢(延迟几秒,还在动)。</strong>小延迟被<strong>租约余量</strong>吸收:预留的 <code>lease_deadline = t_end + 5s</code>(<span class="anchor-ref">reservation_table.py:38</span>),迟到几秒的 confirm 照样有效;而过了 t_end 的残留窗口不会挡别人(检查点 2.2 的半开区间性质)。延迟在余量内,<strong>预留表层面</strong>就无感——窗口不误清、也不误挡。物理上的跟车安全不靠这张表,靠安全余量和车载安全层,那是另一层防线。</p>
+
+<p><strong>情况 B:彻底不动了(坏在半路)。</strong>又分通信是否还活着,构成三层防线:</p>
+
+<table>
+<thead><tr><th>防线</th><th>触发条件</th><th>系统动作</th><th>代码</th></tr></thead>
+<tbody>
+<tr><td>① 失联清场</td><td>心跳超时(默认 6s 无上报)</td><td>标 OFFLINE → <code>release_agent</code> 清掉它<strong>全部</strong>预留 → 空间让给别人</td><td><span class="anchor-ref">scheduler_loop.py:131</span>;测试 <code>test_stale_heartbeat_marks_offline_and_releases</code></td></tr>
+<tr><td>② 卡住重规划</td><td>通信活着但 confirm 停了 → 租约(预留结束 + 5s)到期</td><td><code>expire_stale</code> 清残留 → 车进过期名单 → 标 dirty → <strong>从它当前(卡住的)位置重规划</strong>;还坏着就每隔一个租约周期再来一轮</td><td><span class="anchor-ref">reservation_table.py:207</span></td></tr>
+<tr><td>③ 暂堵等待</td><td>规划失败(暂时被别人堵死)</td><td>标 WAITING,下一 tick 再试,不死循环烧 CPU</td><td><span class="anchor-ref">scheduler_loop.py:190</span></td></tr>
+</tbody>
+</table>
+
+<p>demo 的场景 2 演示的是防线 ① 的处理动作(手动把 V2 置 OFFLINE + 释放,看 V3 重规划);心跳超时的自动判定本身在 tick 第 3 步,由 <code>test_anomaly.py</code> 钉死。</p>
+
+<div class="callout warn">
+<span class="callout-title">⚠️ 两个诚实边界(读代码时值得停下来想的)</span>
+<ol>
+<li><strong>渐进延迟检测没接线。</strong><code>slip_threshold</code> 字段在 <code>Vehicle</code> 和 <code>SchedulerConfig</code> 里都声明了("落后计划多少秒触发重规划",<span class="anchor-ref">scheduler_loop.py:72</span>),但 tick() 的 dirty 判定目前只看"被清理过 / 有目标无计划"两个条件——<strong>落后但没超租约的车不会触发重规划</strong>,要等到租约到期才被兜住。把它接上是一个绝佳的课后练习(提示:比较"位置最后一次变化的时间"和"计划中本该到达的时间"),也是 L3-02 滚动重规划的正式内容。</li>
+<li><strong>"尸体占路"是物理问题,时间窗管不了。</strong>release 之后,时空表"看起来"空了,但坏车 physically 还横在路上——调度模型只认时间窗,不认永久障碍,别的车可能规划出一条"从尸体上开过去"的路。工业做法:把该节点/边<strong>标记封锁</strong>(挂一条超长预留,或临时把边权改成 ∞),恢复后再解除,或派人拖车。这正是 L3-04"地图临时封锁"要讲的内容。</li>
+</ol>
+</div>
+
+<!-- ================================================== -->
+<h2 id="recap">小结</h2>
+<ul>
+<li>工业代码<strong>自底向上按依赖读</strong>:名词(models)→ 索引 → 心脏(reservation_table)→ 快照与规划器 → 总指挥(loop)→ 替身与规格(sim/tests)。</li>
+<li>主线一条:预留的一生 = <code>_build_reservations</code> 出生 → <code>reserve_batch</code> 入职 → live 表(被快照读)→ 四种退场(confirm / expire / rollback / release)。</li>
+<li>四个正确性支柱:<strong>单写者、事务原子、租约判失效、每车重拍快照</strong>。每个支柱都有一个亲手实验钉住它。</li>
+<li>架构 = 你熟悉的后端模式的重新组合:event loop + read committed + 无状态计算服务 + 测试替身。</li>
+</ul>
+
+<div class="section-quiz">
+<strong>✅ 自测(每题答案 4 个字,完全等长;答完发我批改)</strong>
+<ol>
+<li>整个核心库里,唯一会调用预留表变更操作、改写车队状态的组件是哪个?</li>
+<li>expire_stale 判定预留失效,只看哪个字段的期限,绝不看 t_end?</li>
+<li>边 A→B 与 B→A 的时间窗同时被占,报告的是哪种冲突?</li>
+<li>规划线程拿到的、和 live 表完全隔离的那份冻结副本,统称什么?</li>
+</ol>
+</div>
+
+<div class="section-source">
+<strong>📚 推荐主源</strong> — <a href="https://intervaltree.readthedocs.io/en/master/">intervaltree 官方文档</a>(散步 1~2 直接相关:我们封装的底层库,读完你会更懂防腐层封了什么)。延伸:Ousterhout《A Philosophy of Software Design》的"深模块"章(<a href="https://web.stanford.edu/~ouster/cgi-bin/book.php">斯坦福课程页</a>)——为什么 reservation_table 接口小而深,那本书给了理论名字。
+</div>
+
+<div class="section-ask">
+<strong>❓ 有问题随时问。</strong>按咱们的约定提醒:本课动手量大(<strong>动手 1 必做、动手 2 必做、动手 3 可选、综合挑战通往 L2-04</strong>),按散步节奏走,做完一站跟我报一站——尤其做完动手 2,我想听你用自己的话讲那个 bug 的连锁反应。走完这五次散步,再回 L2-03/L2-04 理论线,MAPF 和 CBS 会像"给熟人写传记"一样亲切。
+</div>
+
+<div class="lesson-nav">
+  <a href="0013-l2-02-conflict-types.html">← 上一课:L2-02 冲突的本质与分类</a>
+  <a class="next" href="0015-l2-03-mapf.html">下一课:L2-03 MAPF 问题形式化 →</a>
+</div>
+
+</body>
+</html>

@@ -1,5 +1,6 @@
 .DS_Store
 data/
+.ipynb_checkpoints/
 # session-local planning artifacts; keep .zcode/config.json (MCP config) tracked
 .zcode/plans/
 review/

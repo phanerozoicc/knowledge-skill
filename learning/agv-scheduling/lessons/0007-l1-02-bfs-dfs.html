@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>L1-02 · 搜索算法入门:BFS / DFS</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .trace {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: .82rem;
+    line-height: 1.55;
+    background: var(--code-bg);
+    padding: 1rem;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    margin: 1rem 0;
+  }
+  .trace .step { color: var(--accent); font-weight: 600; }
+  .trace .note { color: var(--muted); }
+  .try-it {
+    border: 2px dashed var(--accent);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    margin: 1.5rem 0;
+    background: #f7fbfd;
+  }
+  .try-it h4 { margin-top: 0; color: var(--accent); }
+</style>
+</head>
+<body>
+
+<h1>L1-02 · 搜索算法入门:BFS / DFS</h1>
+
+<div class="lesson-meta">
+  <span class="tag">阶段 L1 单机能力</span>
+  <span class="tag">难度:入门(动手)</span>
+  <span class="tag">前置:L1-01</span>
+  <span class="tag">预计:50 分钟</span>
+</div>
+
+<div class="section-goal">
+  <strong>🎯 这节课你将学会:</strong>亲手实现并运行两个最基础的图搜索算法——BFS(广度优先)和 DFS(深度优先)。它们本身在调度里用得少,但它们是 <strong>Dijkstra 和 A* 的亲爹</strong>。理解了它们"怎么走、为什么慢、为什么不够好",你下一课才能真正理解 Dijkstra 在改进什么。
+</div>
+
+<div class="callout">
+<span class="callout-title">📌 为什么先学"笨办法"</span>
+直接学 A* 你也能记住公式,但会知其然不知其所以然。BFS/DFS 是<strong>认知脚手架</strong>——它们暴露了"朴素搜索的痛点",而 Dijkstra/A* 的每个设计都是对这些痛点的回应。学完这课,你会带着"那怎么改进呢"的好奇心进入 L1-03。
+</div>
+
+<h2 id="setup">实验台:我们的地图</h2>
+
+<p>用 L1-01 你建好的那张图。把它稍微扩展一下,变成下面这个样子——后面 L1 所有课都用它:</p>
+
+<pre><code># bfs_dfs.py 的地图部分
+graph = {
+    "入口":  {"主道": 5},
+    "主道":  {"入口": 5, "岔口A": 3, "岔口B": 6},
+    "岔口A": {"主道": 3, "货架1": 4},
+    "岔口B": {"主道": 6, "货架2": 2, "货架3": 7},
+    "货架1": {"岔口A": 4},
+    "货架2": {"岔口B": 2, "货架3": 3},   # 注意货架2和货架3之间也有通道
+    "货架3": {"岔口B": 7, "货架2": 3},
+}</code></pre>
+
+<figure class="svg-fig">
+<svg viewBox="0 0 460 280" xmlns="http://www.w3.org/2000/svg">
+  <!-- 边 -->
+  <g stroke="#888" stroke-width="2" fill="none">
+    <line x1="80" y1="50" x2="80" y2="110"/>            <!-- 入口-主道 -->
+    <line x1="80" y1="110" x2="200" y2="200"/>          <!-- 主道-岔口A -->
+    <line x1="80" y1="110" x2="340" y2="200"/>          <!-- 主道-岔口B -->
+    <line x1="200" y1="200" x2="200" y2="260"/>         <!-- 岔口A-货架1 -->
+    <line x1="340" y1="200" x2="340" y2="260"/>         <!-- 岔口B-货架2 -->
+    <line x1="340" y1="200" x2="420" y2="260"/>         <!-- 岔口B-货架3 -->
+    <line x1="340" y1="260" x2="420" y2="260"/>         <!-- 货架2-货架3 -->
+  </g>
+  <!-- 边权 -->
+  <g font-size="13" fill="#595959" font-weight="600">
+    <text x="60" y="85">5</text>
+    <text x="120" y="155">3</text>
+    <text x="200" y="155">6</text>
+    <text x="212" y="232">4</text>
+    <text x="350" y="232">2</text>
+    <text x="395" y="232">7</text>
+    <text x="372" y="252">3</text>
+  </g>
+  <!-- 节点 -->
+  <circle cx="80" cy="50" r="16" class="node-circle"/><text x="80" y="54" text-anchor="middle" font-size="10" class="node-label">入口</text>
+  <circle cx="80" cy="110" r="16" class="node-circle"/><text x="80" y="114" text-anchor="middle" font-size="10" class="node-label">主道</text>
+  <circle cx="200" cy="200" r="16" class="node-circle"/><text x="200" y="204" text-anchor="middle" font-size="9" class="node-label">岔口A</text>
+  <circle cx="340" cy="200" r="16" class="node-circle"/><text x="340" y="204" text-anchor="middle" font-size="9" class="node-label">岔口B</text>
+  <circle cx="200" cy="260" r="16" class="node-circle"/><text x="200" y="264" text-anchor="middle" font-size="9" class="node-label">货架1</text>
+  <circle cx="340" cy="260" r="16" class="node-circle"/><text x="340" y="264" text-anchor="middle" font-size="9" class="node-label">货架2</text>
+  <circle cx="420" cy="260" r="16" class="node-circle"/><text x="420" y="264" text-anchor="middle" font-size="9" class="node-label">货架3</text>
+</svg>
+<figcaption>实验台地图(L1 全程通用):7 个节点,带边权。货架2↔货架3 也有通道(边权 3)</figcaption>
+</figure>
+
+<p>注意:这张图<strong>是带边权的</strong>。但 BFS 和 DFS <strong>会故意忽略边权</strong>——这是它们的关键局限,等会儿你会看到后果。</p>
+
+<h2 id="bfs-idea">BFS:广度优先,像水波扩散</h2>
+
+<p><strong>核心思想</strong>:从起点出发,先访问所有<strong>距离为 1 的邻居</strong>,再访问<strong>距离为 2 的</strong>,一层层往外扩。像往水里扔石头,波纹一圈圈扩散。</p>
+
+<div class="backend-analogy">
+BFS 就是你后端熟悉的<strong>消息广播层层扩散</strong>——比如一个事件从服务 A 发出,先到直接依赖 A 的服务,再到依赖它们的 service,逐层传播。或者像 <strong>BFS 遍历关注关系</strong>:先看你的直接关注,再看他们的关注。
+</div>
+
+<h3>BFS 怎么实现:用队列(Queue)</h3>
+
+<p>关键数据结构:<strong>队列(FIFO)</strong>。先把起点放进队列,然后循环:从队列取一个节点→访问它→把它的<strong>没访问过的</strong>邻居放进队列。直到队列空。</p>
+
+<pre><code>from collections import deque
+
+def bfs(graph, start, goal):
+    """最朴素的 BFS:只找'能不能到',先不记路径"""
+    queue = deque([start])           # 队列,先进先出
+    visited = {start}                # 记录已访问,防重复
+    order = []                       # 记录访问顺序,方便观察
+
+    while queue:
+        node = queue.popleft()       # 取队首
+        order.append(node)
+        print(f"访问: {node}")
+
+        if node == goal:
+            print(f"🎉 找到 {goal}!")
+            return order
+
+        for neighbor in graph.get(node, {}):
+            if neighbor not in visited:
+                visited.add(neighbor)
+                queue.append(neighbor)
+
+    print(f"没找到 {goal}")
+    return order</code></pre>
+
+<h3>亲手跑一下:追踪 BFS 的执行</h3>
+
+<p>假设我们要从「入口」找「货架3」。下面是 BFS 一步步干了什么(请对照上面的图和代码看):</p>
+
+<div class="trace"><span class="step">初始</span>  队列=[入口], visited={入口}
+<span class="step">第1轮</span>  取出 <span class="step">入口</span> → 邻居{主道} 入队
+        队列=[主道], visited={入口,主道}
+<span class="step">第2轮</span>  取出 <span class="step">主道</span> → 邻居{入口(已访问),岔口A,岔口B} 入队
+        队列=[岔口A,岔口B], visited={+岔口A,岔口B}
+<span class="step">第3轮</span>  取出 <span class="step">岔口A</span> → 邻居{主道(已),货架1} 入队
+        队列=[岔口B,货架1]
+<span class="step">第4轮</span>  取出 <span class="step">岔口B</span> → 邻居{主道(已),货架2,货架3}
+        <span class="note"># 货架3 就是目标!但它还没被"访问",只是入队</span>
+        队列=[货架1,货架2,货架3], visited={+货架2,货架3}
+<span class="step">第5轮</span>  取出 <span class="step">货架1</span> → 邻居{岔口A(已)} 无新
+<span class="step">第6轮</span>  取出 <span class="step">货架2</span> → 邻居{岔口B(已),货架3(已)} 无新
+<span class="step">第7轮</span>  取出 <span class="step">货架3</span> → 是目标!🎉 找到</div>
+
+<p>注意一个关键点:BFS 找到了「入口→主道→岔口B→货架3」,这是<strong>步数最少</strong>(3 步)的路。BFS 保证这一点——<strong>在无权图上,BFS 找到的就是步数最少的路</strong>。这就是它最大的优点。</p>
+
+<h2 id="dfs-idea">DFS:深度优先,一条路走到黑</h2>
+
+<p><strong>核心思想</strong>:从起点出发,随便挑一个邻居深入,一直深入到没法再深入(撞墙或已访问),再<strong>回退</strong>到上一个分叉,换条路继续深入。像走迷宫,贴着墙一直走。</p>
+
+<div class="backend-analogy">
+DFS 就是你后端熟悉的<strong>调用栈</strong>——一个函数调用另一个,层层深入,最深的先返回。或者像<strong>递归遍历嵌套 JSON</strong>:一头扎到最深的叶子,再逐层退回。
+</div>
+
+<h3>DFS 怎么实现:用栈(Stack)</h3>
+
+<p>关键数据结构:<strong>栈(LIFO)</strong>。和 BFS 唯一的区别就是:取节点时从<strong>另一端</strong>取(后进先出)。</p>
+
+<pre><code>def dfs(graph, start, goal):
+    """最朴素的 DFS:用栈代替队列"""
+    stack = [start]                  # 栈!后进先出
+    visited = {start}
+    order = []
+
+    while stack:
+        node = stack.pop()           # 取栈顶(后进先出)
+        order.append(node)
+        print(f"访问: {node}")
+
+        if node == goal:
+            print(f"🎉 找到 {goal}!")
+            return order
+
+        for neighbor in graph.get(node, {}):
+            if neighbor not in visited:
+                visited.add(neighbor)
+                stack.append(neighbor)
+
+    print(f"没找到 {goal}")
+    return order</code></pre>
+
+<div class="callout">
+<span class="callout-title">🔑 本课最重要的一个观察</span>
+<strong>BFS 和 DFS 的代码几乎完全一样!</strong>唯一区别:数据结构从「队列」换成「栈」。就这一处改动,行为从"层层扩散"变成"一条路走到黑"。<br><br>
+这意味着什么?<strong>搜索算法的本质,就是"按什么顺序扩展节点"</strong>。BFS 用队列→优先扩展浅层;DFS 用栈→优先扩展深层。后面 Dijkstra 用"按代价排序的队列",A* 用"按 f=g+h 排序的队列"——<strong>都是同一个框架,只是换了个"排序规则"</strong>。抓住这一点,你就抓住了所有路径规划算法的骨架。
+</div>
+
+<h2 id="the-problem">它们为什么不够好(为下一课铺垫)</h2>
+
+<p>BFS/DFS 能找到路,但有两个致命问题,正是这两个问题逼出了 Dijkstra 和 A*:</p>
+
+<h3>问题 1:BFS 忽略边权 → 找到的可能不是"最省钱"的路</h3>
+
+<p>回到我们的图。BFS 说「入口→主道→岔口B→货架3」最优(3 步)。但算算代价:</p>
+
+<pre><code>BFS 选的路:  入口→主道(5)→岔口B(6)→货架3(7)   总代价 = 18
+另一条路:    入口→主道(5)→岔口B(6)→货架2(2)→货架3(3)   总代价 = 16
+</code></pre>
+
+<p>看!虽然多走一步,但<strong>总代价反而更低</strong>(16 < 18),因为货架2到货架3很近。BFS 因为只数步数不看代价,<strong>错过了更优的路</strong>。这就是为什么我们需要 Dijkstra——它<strong>按累积代价排序,而不是按步数</strong>。</p>
+
+<h3>问题 2:在真实大图上太慢</h3>
+
+<p>BFS 在我们 7 节点的小图上飞快。但想象一个 500 节点的真实仓库:BFS 要把大量"和目标完全无关"的节点都扩散一遍。它没有"往目标方向使劲"的直觉。<strong>这就是 A* 要解决的</strong>——加一个启发函数,让搜索"聪明地往目标靠"。</p>
+
+<div class="try-it">
+<h4>🔧 动手练习(请实际运行代码)</h4>
+<ol>
+<li>把上面的 <code>bfs</code> 和 <code>dfs</code> 函数,加上 <code>graph</code>,存成 <code>bfs_dfs.py</code> 跑起来。</li>
+<li>运行 <code>bfs(graph, "入口", "货架3")</code> 和 <code>dfs(graph, "入口", "货架3")</code>,观察两者访问顺序的差别。</li>
+<li><strong>思考题</strong>:DFS 找到的路径,步数一定和 BFS 一样少吗?试试把目标改成「货架1」,对比两者的访问顺序。把你的发现告诉我。</li>
+</ol>
+<p style="color:var(--muted);font-size:.9rem;">亲手跑一次,你会发现 DFS 的访问顺序"跳跃感"很强(一头扎进去),而 BFS 是"均匀扩散"。这种体感对理解下一课的 Dijkstra 至关重要。</p>
+</div>
+
+<h2 id="recap">小结</h2>
+
+<ul>
+<li>BFS(队列,层层扩散)保证在<strong>无权图</strong>上找到<strong>步数最少</strong>的路。</li>
+<li>DFS(栈,一条路走到黑)快但不保证任何最优性。</li>
+<li><strong>两者代码几乎一样,只差数据结构</strong>——搜索算法的本质就是"按什么顺序扩展节点"。</li>
+<li>BFS/DFS 的两大痛点:① 忽略边权,可能错过代价更低的路;② 没有方向感,大图上太慢。</li>
+<li>这两个痛点分别由 <strong>Dijkstra</strong>(按代价排序)和 <strong>A*</strong>(加启发函数)解决——下一课的主角。</li>
+</ul>
+
+<div class="section-quiz">
+<strong>✅ 自测(每题答案 4 个字,完全等长)</strong>
+<ol>
+<li>BFS 和 DFS 的代码几乎一样,唯一的区别是用了不同的什么?</li>
+<li>BFS 能保证找到"步数最少"的路,前提是图里没有什么?</li>
+<li>DFS "一条路走到黑、撞墙再回头"这种行为,是因为它用了什么结构?</li>
+<li>BFS 因为忽略了边权,导致它可能错过什么更优的路?(按代价算更优的路,4字)</li>
+</ol>
+</div>
+
+<div class="section-source">
+<strong>🔗 推荐主源</strong><br>
+<a href="https://www.redblobgames.com/pathfinding/a-star/introduction.html">Red Blob Games 第一节</a> —— 用动画演示 BFS 如何扩散,看完你会对"层层扩散"有不可逆的直觉。2 分钟就够。
+</div>
+
+<div class="section-ask">
+<strong>❓ 有问题随时问。</strong>特别想看你<strong>练习第 3 题的思考结果</strong>——BFS 和 DFS 找"货架1"时的访问顺序差异。这能让我判断你对"扩展顺序"的理解到位没,直接关系下一课 Dijkstra 你能不能跟上。
+</div>
+
+<div class="lesson-nav">
+  <a href="0006-l1-01-map-modeling.html">← 上一课:L1-01 地图建模</a>
+  <a class="next" href="0008-l1-03-dijkstra.html">下一课:L1-03 Dijkstra 算法 →</a>
+</div>
+
+</body>
+</html>

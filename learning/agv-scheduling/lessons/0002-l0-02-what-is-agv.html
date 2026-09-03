@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>L0-02 · AGV / 移动机器人是什么</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<h1>L0-02 · AGV / 移动机器人是什么</h1>
+
+<div class="lesson-meta">
+  <span class="tag">阶段 L0 地基</span>
+  <span class="tag">难度:入门</span>
+  <span class="tag">前置:L0-01</span>
+  <span class="tag">预计:40 分钟</span>
+</div>
+
+<div class="section-goal">
+  <strong>🎯 这节课你将学会:</strong>看到一个应用场景,能准确判断「这该用 AGV 还是 AMR、什么导航方式、什么底盘」,并讲清它们和你最终要做的<strong>调度系统</strong>的关系——也就是:被调度的「对象」到底是什么,它有哪些属性会影响调度决策。
+</div>
+
+<h2 id="core-confusion">先破一个最容易混的概念:AGV vs AMR</h2>
+
+<p>这两个词在行业里被混用得很厉害,但它们<strong>对调度系统的影响完全不同</strong>,必须分清。一句话区分:</p>
+
+<blockquote>
+<p><strong>AGV</strong>(Automated Guided Vehicle,自动导引车):走<strong>固定/预设路线</strong>,像火车,笨但可靠。调度它 = 排运行图。<br>
+<strong>AMR</strong>(Autonomous Mobile Robot,自主移动机器人):能<strong>自己看路、自己绕障</strong>,像出租车,灵活但难管。调度它 = 下指令、放权。</p>
+</blockquote>
+
+<table>
+<thead><tr><th></th><th>AGV(导引车)</th><th>AMR(自主机器人)</th></tr></thead>
+<tbody>
+<tr><td><strong>怎么认路</strong></td><td>磁条/二维码/反光标记,跟着<strong>预设路径</strong></td><td>SLAM 自建地图,<strong>实时规划</strong></td></tr>
+<tr><td><strong>遇到障碍</strong></td><td>停下等人来(或停死)</td><td>自己绕过去</td></tr>
+<tr><td><strong>路线灵活性</strong></td><td>低,改路线要改物理设施</td><td>高,地图一改全队更新</td></tr>
+<tr><td><strong>对调度的依赖</strong></td><td><strong>极高</strong>——车自己不会避让,全靠中央调度</td><td>中等——车能自治,调度更多是协调</td></tr>
+<tr><td><strong>典型场景</strong></td><td>大流量、重复路线(产线送料、港口)</td><td>多变环境(仓储拣货、医院配送)</td></tr>
+<tr><td><strong>成本/可靠性</strong></td><td>单车便宜、极其稳定</td><td>单车贵、灵活但故障面更大</td></tr>
+</tbody>
+</table>
+
+<div class="backend-analogy">
+<ul>
+<li><strong>AGV ≈ 静态路由 / 固定专线</strong>:像你给某个服务配死的路由规则,流量打过来无脑转发,简单可靠,但换个路径要改配置。</li>
+<li><strong>AMR ≈ 动态路由 / 服务发现</strong>:像带服务发现的智能路由,每个节点自己探测环境、自己选路,灵活但需要更复杂的协调协议。</li>
+</ul>
+<strong>对你做调度系统的影响:</strong>AGV 场景里,调度系统是「上帝」,几乎所有智能都在中央,车只是执行器;AMR 场景里,智能<strong>部分下放到车端</strong>,调度系统更像「协调者」。这就是 L3-03 为什么要学 VDA5050——它就是为了在「中央智能」和「车端智能」之间划清边界而生的标准。
+</div>
+
+<div class="callout warn">
+<span class="callout-title">⚠️ 行业现实:别太纠结字面</span>
+实际产品里界限很模糊。很多「AGV」其实带 SLAM,很多「AMR」也能走固定路线。供应商的营销话术更是乱来。你要建立的不是死记定义,而是<strong>看一台车时,问三个问题</strong>(见下面 2.3),这三个问题的答案才真正决定它对调度的影响。
+</div>
+
+<h2 id="tax">AGV 的几种主要形态</h2>
+
+<p>除了 AGV/AMR 这个「智能程度」的轴,还有「<strong>干什么活、长什么样</strong>」这条轴。常见有这几类,调度系统对它们的处理方式差别很大:</p>
+
+<table>
+<thead><tr><th>类型</th><th>干什么</th><th>调度特点</th></tr></thead>
+<tbody>
+<tr><td><strong>搬运 AGV / Kiva 式</strong></td><td>钻到货架底下,把整个货架驮走</td><td>任务简单(点对点),但<strong>数量极大</strong>(亚马逊数万台),核心是规模化调度</td></tr>
+<tr><td><strong>叉车 AGV</strong></td><td>自动叉车,叉托盘搬运</td><td>载重大、<strong>运动学约束强</strong>(阿克曼,不能原地转),调度要考虑转弯半径</td></tr>
+<tr><td><strong>牵引 AGV</strong></td><td>拖一串小车(像火车头)</td><td>拖挂队列,<strong>长度长、倒车难</strong>,路径规划要预留更大空间</td></tr>
+<tr><td><strong>料箱机器人</strong></td><td>在货架上爬上爬下取料箱</td><td>既有移动也有<strong>机械臂动作</strong>,调度要管两段</td></tr>
+<tr><td><strong>合流/分拣 AGV</strong></td><td>带着包裹到分拣口</td><td>大量车汇入汇出,核心是<strong>路口交通管制</strong></td></tr>
+<tr><td><strong>人形 / 具身机器人</strong></td><td>类人形态,执行多样任务</td><td>见 L4-02,调度难度<strong>高一个量级</strong></td></tr>
+</tbody>
+</table>
+
+<h2 id="three-questions">看一台车时,问这三个问题</h2>
+
+<p>这是本课最实用的产出。以后无论是选型、看方案、还是设计调度,对着任何一台移动机器人,问这三个问题,就能摸清它对调度系统的影响:</p>
+
+<h3>问题 1:它<strong>怎么认路</strong>?(导航方式)</h3>
+<p>决定了「地图数据从哪来、改路线的成本、定位精度」。主要几类(HW-02 会深入):</p>
+<ul>
+<li><strong>磁条/色带</strong>:物理贴线,最老最稳,改路线要重新贴。</li>
+<li><strong>二维码/反光标记</strong>:地上贴码,经过时定位,精度高,Kiva 就用这种。</li>
+<li><strong>SLAM(激光/视觉)</strong>:自己建图自己定位,最灵活,环境变化大时首选。</li>
+<li><strong>GPS/RTK</strong>:室外港口、园区,精度米级到厘米级。</li>
+</ul>
+
+<h3>问题 2:它<strong>怎么动</strong>?(底盘运动学)</h3>
+<p>决定了「能不能原地转、转弯半径多大、路径能不能随便画」。主要几类(L1-05、HW-03 会深入):</p>
+<ul>
+<li><strong>差速驱动</strong>:两个轮子转速差转向,能原地转,最灵活但只能平面。</li>
+<li><strong>阿克曼</strong>:像汽车,前轮转向,有转弯半径,不能原地转(叉车 AGV 常见)。</li>
+<li><strong>全向(麦克纳姆/舵轮)</strong>:能横着走、斜着走,极致灵活,轮子贵。</li>
+</ul>
+<div class="callout">
+<span class="callout-title">为什么这个对调度要紧</span>
+你做路径规划时,「能不能原地转」直接决定路径能不能有直角。差速车能原地转 → 路径可以是格子直角;阿克曼不行 → 必须用平滑曲线(Dubins/Reeds-Shepp,L1-05 会讲)。<strong>底盘构型 = 路径规划的硬约束。</strong>
+</div>
+
+<h3>问题 3:它<strong>有多少自治权</strong>?(智能在中央还是车端)</h3>
+<p>决定了「调度系统的边界在哪」。这是架构问题:</p>
+<ul>
+<li><strong>中央集权式</strong>:所有路径、避让都由调度算好,车只执行(典型 AGV)。调度复杂、车简单。</li>
+<li><strong>车端自治式</strong>:调度只下发任务「去 X 点」,车自己规划、自己避障(典型 AMR)。调度简单、车复杂。</li>
+<li><strong>混合式</strong>:常态车端自治,拥堵/特殊区域中央接管。工业实践主流。</li>
+</ul>
+
+<div class="backend-analogy">
+这第三问的答案,直接对应你熟悉的<strong>架构决策</strong>:
+<ul>
+<li>中央集权 ≈ <strong>单体服务,所有逻辑在中心</strong></li>
+<li>车端自治 ≈ <strong>微服务,每个节点有自己大脑</strong></li>
+<li>混合式 ≈ <strong>边缘计算 + 云端协调</strong>(也是现在的工业主流)</li>
+</ul>
+你会发现,从 AGV 调度的架构演进,到后端架构的演进,几乎是<strong>同一条历史轨迹</strong>:从全集中,到部分下放,到云边协同。学这门课,你其实是在用新的实例,重新理解你已经知道的架构哲学。
+</div>
+
+<h2 id="scenarios">把场景和车型对上号</h2>
+
+<p>你列过感兴趣的场景,现在用刚学的三个问题,给每个场景配一个「典型答案」。这就是你未来做方案设计的基本功:</p>
+
+<table>
+<thead><tr><th>场景</th><th>典型车型</th><th>导航</th><th>底盘</th><th>智能在哪</th><th>调度难点</th></tr></thead>
+<tbody>
+<tr><td><strong>仓储拣货(Kiva)</strong></td><td>搬运 AGV</td><td>二维码</td><td>差速</td><td>中央</td><td>极大规模(数千台)的路径与冲突</td></tr>
+<tr><td><strong>工厂产线送料</strong></td><td>搬运/叉车 AGV</td><td>磁条/SLAM</td><td>差速/阿克曼</td><td>中央为主</td><td>节拍配合、死锁防护</td></tr>
+<tr><td><strong>港口集装箱</strong></td><td>大型 AGV/集卡</td><td>RTK-GPS+SLAM</td><td>阿克曼</td><td>混合</td><td>大范围、单车贵、户外定位</td></tr>
+<tr><td><strong>医院/办公配送</strong></td><td>AMR</td><td>视觉 SLAM</td><td>差速/全向</td><td>车端自治</td><td>人机混行、动态障碍</td></tr>
+<tr><td><strong>人形/具身</strong></td><td>人形机器人</td><td>视觉 SLAM</td><td>腿足(高自由度)</td><td>车端为主+技能编排</td><td>见 L4-02,难度高一个量级</td></tr>
+</tbody>
+</table>
+
+<div class="callout">
+<span class="callout-title">📌 一张表浓缩本课</span>
+<em>看到任何移动机器人,默念这三个问题:① 怎么认路? ② 怎么动? ③ 多少自治权?——这三个答案,就决定了它对调度系统的影响。</em>
+</div>
+
+<h2 id="relation-to-scheduling">这和你要做的调度系统什么关系</h2>
+
+<p>记住一个定位关系,它贯穿全课程:</p>
+
+<blockquote>
+<p><strong>调度系统是「大脑」,AGV/机器人是「手脚」。</strong> 本课程 90% 的篇幅在打造「大脑」(L1~L5),HW 硬件模块负责让你看懂「手脚」长什么样、能做什么、不能做什么。你要做工业级调度系统,必须既懂大脑,也懂手脚的约束——否则你会设计出「大脑想得美,手脚做不到」的方案。</p>
+</blockquote>
+
+<p>具体说,AGV 的这些属性会<strong>反过来约束</strong>调度系统:</p>
+<ul>
+<li>底盘运动学 → 约束<strong>路径规划</strong>能产生什么形状的路径(L1-05)</li>
+<li>导航精度与定位频率 → 约束<strong>状态同步</strong>的实时性设计(L3-02)</li>
+<li>自治程度 → 约束<strong>调度架构</strong>是集中还是分布(L3-01、L4-01)</li>
+<li>通信能力 → 约束<strong>指令下发与重规划</strong>的频率(L3-03)</li>
+<li>电池与充电 → 约束<strong>任务分配</strong>必须考虑电量(L2-01)</li>
+</ul>
+
+<div class="backend-analogy">
+这就是典型的<strong>「能力发现 + 健康检查」模式</strong>:调度系统(中央)必须知道每个 worker(车)的能力清单(能走什么路、转多大的弯)和状态(电量、位置、是否在线),才能正确派活。和你在后端做的服务注册 + 心跳 + 健康检查是同一件事,只是「worker」换成了会动的物理实体。
+</div>
+
+<h2 id="recap">小结</h2>
+
+<ul>
+<li><strong>AGV</strong> 走固定路线、靠中央; <strong>AMR</strong> 自己看路、有自治权。两者对调度的依赖程度相反。</li>
+<li>区分不要死记字面,用<strong>三个问题</strong>:① 怎么认路(导航)② 怎么动(底盘)③ 多少自治权(智能分布)。</li>
+<li>底盘运动学 = 路径规划的硬约束(差速能原地转、阿克曼不能)。</li>
+<li>智能在中央还是在车端,决定了调度架构是集中式还是分布式——这和后端架构演进同构。</li>
+<li>AGV 的属性(底盘/导航/自治/通信/电量)会<strong>反过来约束</strong>调度系统的设计。</li>
+</ul>
+
+<div class="section-quiz">
+<strong>✅ 自测(每题答案都是 4 个字,完全等长)</strong>
+<ol>
+<li>走固定预设路线、自己不会避障、完全依赖中央调度的那类车,英文缩写是?</li>
+<li>能自己用 SLAM 看路、自己绕障的那类车,英文缩写是?</li>
+<li>看一台车时,判断它「能不能原地转、转弯半径多大」对应的是哪方面?</li>
+<li>「所有智能都在中央,车只执行指令」的调度架构,叫什么式?</li>
+</ol>
+<p style="color:var(--muted);font-size:.85rem;margin-top:.8rem;">老规矩,答案发我。这 4 题如果全对,L0-02 就扎实了,我们直接进 L0-03 调度系统全景图——那是最关键的「地图课」,会把整个课程的模块一次性串起来。</p>
+</div>
+
+<div class="section-source">
+<strong>🔗 推荐主源(课后花点时间,强烈推荐看)</strong><br>
+去视频网站搜 <em>"Kiva robot warehouse"</em>(亚马逊仓储机器人真实运行)和 <em>"port automated AGV"</em>(港口 AGV),各看 2~3 分钟。<strong>亲眼看到车怎么跑,比读十页书都管用</strong>——它会给你后面所有算法学习提供实物锚点。看完你会本能地理解「为什么需要冲突消解、为什么需要死锁防护」。
+</div>
+
+<div class="section-ask">
+<strong>❓ 有问题随时问我。</strong>比如:你工作中接触的是哪类车?或者你关心的某个场景,想让我帮你对号入座到哪种车型、哪种导航?这些信息也能帮我后面的课更贴合你的实际。
+</div>
+
+<div class="lesson-nav">
+  <a href="0001-l0-01-why-scheduling.html">← 上一课:L0-01 为什么需要调度系统</a>
+  <a class="next" href="0003-l0-03-system-panorama.html">下一课:L0-03 调度系统全景图 →</a>
+</div>
+
+</body>
+</html>

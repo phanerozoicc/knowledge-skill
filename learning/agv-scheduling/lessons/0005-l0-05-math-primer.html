@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>L0-05 · 数学与算法前置(极简版)</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .graph-ascii {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: .85rem;
+    line-height: 1.5;
+    background: var(--code-bg);
+    padding: 1rem;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    margin: 1rem 0;
+  }
+  .intuition {
+    background: #f4f8ec;
+    border-left: 3px solid #5a8a2a;
+    padding: .8rem 1rem;
+    border-radius: 0 4px 4px 0;
+    margin: 1.2rem 0;
+  }
+  .intuition::before {
+    content: "💡 直觉";
+    display: block;
+    font-weight: 600;
+    color: #5a8a2a;
+    margin-bottom: .3rem;
+  }
+</style>
+</head>
+<body>
+
+<h1>L0-05 · 数学与算法前置(极简版)</h1>
+
+<div class="lesson-meta">
+  <span class="tag">阶段 L0 地基</span>
+  <span class="tag">难度:入门(但关键)</span>
+  <span class="tag">前置:无</span>
+  <span class="tag">预计:50 分钟</span>
+</div>
+
+<div class="section-goal">
+  <strong>🎯 这节课你将学会:</strong>看懂接下来 L1、L2 全部算法所需的<strong>最小数学语言</strong>——什么是图、什么是搜索、什么是最优解、什么是复杂度。我们不展开任何数学证明,只建立<strong>够用的直觉</strong>。学完这课,你能看懂「在图上找最短路」这句话里的每一个词,并为 L1-03(Dijkstra)和 L1-04(A*)做好准备。
+</div>
+
+<div class="callout">
+<span class="callout-title">📌 这课为什么重要</span>
+你说过算法基础偏弱。这没关系——调度系统需要的数学其实<strong>很窄</strong>:主要是<strong>图论</strong>和一点点<strong>复杂度概念</strong>。不需要微积分、线性代数、概率论(那些只在高级优化/RL 里才用)。把这课吃透,你就拿到了进入 L1 的入场券。
+</div>
+
+<h2 id="graph">一、图(Graph):调度系统的核心数据结构</h2>
+
+<p>整个 L1、L2 的算法,几乎都跑在「图」上。理解图,就理解了调度算法的舞台。</p>
+
+<h3>1.1 图是什么</h3>
+
+<p><strong>图 = 节点(Node/Vertex)+ 边(Edge)</strong>。节点表示「地点」,边表示「地点之间的连接」。</p>
+
+<div class="graph-ascii">       B ────── C
+       │        │
+       │        │
+       A ────── D ────── E</div>
+
+<p>上面就是一个图:5 个节点(A~E),6 条边把它们连起来。在调度里:</p>
+<ul>
+<li><strong>节点</strong> = 仓库里的某个位置(路口、货架位、充电桩、停靠点)</li>
+<li><strong>边</strong> = 两个位置之间有一条可走的通道</li>
+</ul>
+
+<div class="backend-analogy">
+图就是你天天打交道的东西:
+<ul>
+<li>服务依赖图(服务 A 调用 B 和 C)</li>
+<li>数据库的 ER 图(实体和关系)</li>
+<li>社交网络的关注关系</li>
+<li>Git 的提交历史(也是个图!)</li>
+</ul>
+唯一区别:调度的边上带着「<strong>距离/时间</strong>」,因为车走过去要花代价。
+</div>
+
+<h3>1.2 边权(Weight):代价</h3>
+
+<p>每条边可以带一个「<strong>权重</strong>」,表示走这条边的代价。代价可以是距离、时间、能耗——取决于你优化什么。</p>
+
+<div class="graph-ascii">       B ──3── C
+       │      │
+       2      4
+       │      │
+       A ──1── D ──5── E</div>
+
+<p>现在每条边有了数字。A→B 距离 2,A→D 距离 1。「找最短路」就是:在所有从 A 到 E 的路径里,找边权之和最小的那条。</p>
+
+<div class="intuition">
+「最短路」不是几何上最短,是<strong>代价之和最小</strong>。代价可以是距离、时间、能耗——由你定义。这就是为什么同一个图,「最短时间路」和「最短能耗路」可能不一样。
+</div>
+
+<h3>1.3 有向 vs 无向</h3>
+
+<p>边可以分两种:</p>
+<ul>
+<li><strong>无向边</strong>:A─B,双向可走(像普通通道)</li>
+<li><strong>有向边</strong>:A→B,只能从 A 到 B(像<strong>单向通道</strong>,调度里很常见!)</li>
+</ul>
+
+<div class="graph-ascii">无向:    A ─── B        双向
+有向:    A ───▶ B        只能 A 到 B</div>
+
+<p>调度里,为了防死锁,很多通道会被设计成<strong>单向</strong>(L2-05 会讲为什么单向化能防死锁)。所以你要习惯看有向图。</p>
+
+<h3>1.4 邻接表:图在代码里长什么样</h3>
+
+<p>图在内存里通常用「邻接表」存——每个节点记着「我能直接去哪些节点、代价多少」。</p>
+
+<pre><code># 上面的图,用 Python 字典表示邻接表
+graph = {
+    'A': [('B', 2), ('D', 1)],
+    'B': [('A', 2), ('C', 3)],
+    'C': [('B', 3), ('D', 4)],
+    'D': [('A', 1), ('C', 4), ('E', 5)],
+    'E': [('D', 5)],
+}</code></pre>
+
+<div class="backend-analogy">
+这就是一张<strong>路由表</strong> / <strong>服务依赖 map</strong>。后端里你肯定写过类似结构:`service_dependencies = {'订单服务': ['支付服务', '库存服务'], ...}`。一模一样。
+</div>
+
+<h3>1.5 栅格地图 vs 拓扑图(两种建图思路)</h3>
+
+<p>这是 L1-01 会深入讲的,这里先建直觉。物理空间有两种抽象成图的方式:</p>
+
+<table>
+<thead><tr><th></th><th>栅格地图(Grid)</th><th>拓扑图(Topological)</th></tr></thead>
+<tbody>
+<tr><td><strong>长啥样</strong></td><td>把空间切成方格子,每格是个节点,相邻 8 格有边</td><td>只在关键点(路口/货架)设节点,通道是边</td></tr>
+<tr><td><strong>节点数</strong></td><td>极多(1000㎡ 仓库可能上万格)</td><td>少(几十到几百)</td></tr>
+<tr><td><strong>擅长</strong></td><td>精细避障、连续空间规划</td><td>大规模、速度快、结构清晰</td></tr>
+<tr><td><strong>典型用</strong></td><td>SLAM、AMR 局部规划</td><td>AGV 全局调度、Kiva 式</td></tr>
+</tbody>
+</table>
+
+<p>工业系统常<strong>两者结合</strong>:拓扑图做全局规划,栅格做局部精细避障。L1-01 会讲怎么选。</p>
+
+<h2 id="search">二、搜索(Search):算法的核心动作</h2>
+
+<h3>2.1 什么是"搜索"</h3>
+
+<p>在图上「搜索」= 从起点出发,沿着边走,直到找到目标。所有路径规划算法(Dijkstra、A*)本质都是「搜索」,只是<strong>走法的聪明程度</strong>不同。</p>
+
+<div class="intuition">
+搜索 = 在一个分叉很多的空间里找东西。你站在 A,要去 E,但前面有无数岔路。算法就是在回答:「<strong>下一步该往哪走,才能又快又对地到 E</strong>」。
+</div>
+
+<h3>2.2 盲搜:BFS 与 DFS(L1-02 会讲)</h3>
+
+<p>最朴素的两种搜索:</p>
+<ul>
+<li><strong>BFS(广度优先)</strong>:像水波扩散,一层层往外探。能保证在<strong>无权图</strong>上找到<strong>步数最少</strong>的路,但不一定是<strong>代价最小</strong>的。</li>
+<li><strong>DFS(深度优先)</strong>:一条路走到黑,撞墙再回头。快但不保证最优。</li>
+</ul>
+
+<div class="graph-ascii">BFS 探索顺序(从 A 出发,逐层扩散):
+第1层: A
+第2层: B, D          ← A 的邻居
+第3层: C, E           ← B 和 D 的邻居
+→ 找到 E 时,路径 A→D→E 是步数最少的</div>
+
+<p>这两个算法 L1-02 会动手实现。现在你只需知道:它们是「笨办法」,是 Dijkstra/A* 的<strong>基础铺垫</strong>。</p>
+
+<h3>2.3 带权搜索:为什么需要 Dijkstra 和 A*</h3>
+
+<p>BFS 只能找「步数最少」的路。但现实中边有权重(距离),你要的是「<strong>代价之和最小</strong>」的路。看这个例子:</p>
+
+<div class="graph-ascii">  A ──1── D ──5── E     路径1: A→D→E,代价 1+5=6
+  │                      
+  2                      
+  │                      
+  B ──3── C ──4── (接D)  路径2: A→B→C→D→E,代价 2+3+4+5=14</div>
+
+<p>BFS 会选路径1(2 步),但代价是 6。<strong>可能存在更优的吗?</strong> 这就要靠 Dijkstra(找全局最优)和 A*(又快又对)——L1-03、L1-04 的主角。</p>
+
+<h2 id="optimal">三、最优解 vs 可行解:工业系统的核心权衡</h2>
+
+<p>这是整个调度领域最重要的概念之一,你以后做工业系统会反复遇到。</p>
+
+<table>
+<thead><tr><th></th><th>最优解(Optimal)</th><th>可行解(Feasible)</th></tr></thead>
+<tbody>
+<tr><td><strong>定义</strong></td><td>所有可能里<strong>最好</strong>的那个</td><td>能用的、不违反约束的(不一定最好)</td></tr>
+<tr><td><strong>找它</strong></td><td>极难(尤其多车时,可能算不完)</td><td>相对容易</td></tr>
+<tr><td><strong>成本</strong></td><td>计算时间可能爆炸</td><td>快</td></tr>
+<tr><td><strong>何时要</strong></td><td>规模小、或代价敏感(每秒省几万块)</td><td>规模大、实时性要求高(99% 工业场景)</td></tr>
+</tbody>
+</table>
+
+<div class="intuition">
+工业调度的金句:<strong>「最好」是「好」的敌人。</strong> 花 10 秒算出最优解,vs 花 0.1 秒算出一个"还行"的解——后者在 100 台车实时跑的场景里完胜。这就是为什么工业界大量用<strong>启发式</strong>(heuristic):不一定最优,但够快够好。
+</div>
+
+<div class="backend-analogy">
+这就是你后端天天遇到的权衡:
+<ul>
+<li><strong>缓存</strong>:不读最新数据(可行解),换速度</li>
+<li><strong>最终一致性</strong>:不强一致(可行解),换可用性</li>
+<li><strong>限流降级</strong>:不服务所有人(可行解),换系统存活</li>
+</ul>
+调度里的「放弃最优、要可行」是<strong>同一个思维模式</strong>。
+</div>
+
+<h2 id="complexity">四、复杂度(Big-O):算法贵不贵</h2>
+
+<p>复杂度回答一个问题:「<strong>输入变大时,算法会慢成什么样</strong>」。用 Big-O 记号表示。</p>
+
+<h3>4.1 直觉理解</h3>
+
+<table>
+<thead><tr><th>记号</th><th>名字</th><th>n=10 时</th><th>n=1000 时</th><th>感受</th></tr></thead>
+<tbody>
+<tr><td><strong>O(1)</strong></td><td>常数</td><td>1</td><td>1</td><td>飞快,不随规模变化</td></tr>
+<tr><td><strong>O(log n)</strong></td><td>对数</td><td>3</td><td>10</td><td>极快(二分查找)</td></tr>
+<tr><td><strong>O(n)</strong></td><td>线性</td><td>10</td><td>1000</td><td>可接受(遍历一遍)</td></tr>
+<tr><td><strong>O(n²)</strong></td><td>平方</td><td>100</td><td>1,000,000</td><td>规模一大就吃力</td></tr>
+<tr><td><strong>O(2ⁿ)</strong></td><td>指数</td><td>1024</td><td>💥 宇宙爆炸</td><td>不可用,只对小规模可行</td></tr>
+</tbody>
+</table>
+
+<div class="intuition">
+Big-O 不关心具体快慢,只关心<strong>增长曲线</strong>。O(n²) 在 n=10 时还行,n=1000 就崩了。调度系统的核心难点,就是很多问题的<strong>最优解是指数级</strong>的——这就是下一节要讲的 NP-hard。
+</div>
+
+<div class="backend-analogy">
+你后端其实天天用复杂度直觉:
+<ul>
+<li>为什么数据库要建索引?因为全表扫描是 O(n),索引查找是 O(log n)</li>
+<li>为什么 N+1 查询是性能杀手?因为它把 O(n) 变成了 O(n × 单次成本)</li>
+<li>为什么分布式锁要小心用?它是 O(参与方数) 的串行瓶颈</li>
+</ul>
+调度里完全一样:A* 是 O(n log n),CBS 在最坏情况是指数级——这就是为什么大规模调度不能蛮干。
+</div>
+
+<h3>4.2 实用记忆(够用)</h3>
+
+<p>你不用会推导复杂度,但要会<strong>感受</strong>这几个档位:</p>
+
+<ul>
+<li><strong>O(n) / O(n log n)</strong>:工业可用,放心大规模</li>
+<li><strong>O(n²)</strong>:中等规模可以(几百台车),上千就吃力</li>
+<li><strong>O(2ⁿ) / 指数级</strong>:小规模可以(几台车),稍大就必须用启发式</li>
+</ul>
+
+<h2 id="np-hard">五、NP-hard:为什么调度"没有银弹"</h2>
+
+<p>这一节极重要,它解释了整个调度领域的<strong>根本困境</strong>。</p>
+
+<h3>5.1 一句话定义</h3>
+
+<blockquote>
+<p><strong>NP-hard 问题</strong>:一类<strong>不存在已知快速(多项式时间)算法求最优解</strong>的问题。当规模变大时,找最优解的计算时间会<strong>指数级爆炸</strong>。</p>
+</blockquote>
+
+<h3>5.2 为什么调度大多是 NP-hard</h3>
+
+<p>坏消息:多车调度(MAPF)就是 NP-hard。意思是:</p>
+<ul>
+<li>2~3 台车:可以蛮力找最优</li>
+<li>10 台车:最优解要算几秒</li>
+<li>100 台车:最优解可能算几年都算不完</li>
+</ul>
+
+<div class="callout warn">
+<span class="callout-title">⚠️ 这意味着什么</span>
+对于工业级调度(几十上百台车),<strong>你永远不可能算出"最优"方案</strong>。你能做的,是在有限时间内算出一个「<strong>足够好的可行解</strong>」。这就是为什么 L2 充斥着各种启发式、近似算法、滚动重规划——它们都是在向 NP-hard 妥协。
+</div>
+
+<h3>5.3 应对 NP-hard 的工程哲学</h3>
+
+<p>整个 L2、L3 的设计,本质上就是在回答:「面对 NP-hard,工业上怎么活下来?」答案是一套组合拳:</p>
+
+<ol>
+<li><strong>近似算法</strong>:不追求最优,追求"够好且快"(如 CBS 本身就是次优的)</li>
+<li><strong>启发式</strong>:用经验/直觉裁剪搜索空间(如 A* 的启发函数)</li>
+<li><strong>分层/分治</strong>:把大问题拆成小问题(区域调度、分层规划)</li>
+<li><strong>滚动重规划</strong>:不一次算死,边走边算,适应变化</li>
+<li><strong>松弛约束</strong>:允许稍微次优,换可计算性</li>
+</ol>
+
+<div class="backend-analogy">
+这就是你后端的日常啊:
+<ul>
+<li>缓存 ≈ 近似算法(接受不是最新)</li>
+<li>布隆过滤器 ≈ 启发式(允许假阳性换速度)</li>
+<li>微服务拆分 ≈ 分治(每个服务管一小块)</li>
+<li>流式处理 ≈ 滚动重规划(不批量算死,边来边算)</li>
+<li>最终一致 ≈ 松弛约束(放弃强一致换可用性)</li>
+</ul>
+<strong>NP-hard 不是调度特有的噩梦,它是所有复杂系统的共同命运。</strong> 你已经在后端积累了大量"和 NP-hard 共存"的工程智慧,这些在调度里全部适用。
+</div>
+
+<h2 id="recap">小结</h2>
+
+<ul>
+<li><strong>图</strong> = 节点 + 边 + 边权;调度里节点是位置,边是通道,边权是代价。有向边用于单向通道。</li>
+<li><strong>搜索</strong> = 在图上找路;BFS/DFS 是笨办法,Dijkstra/A* 是聪明办法(L1 会学)。</li>
+<li><strong>最优解 vs 可行解</strong>:工业调度 99% 选可行解——「最好」是「好」的敌人。</li>
+<li><strong>复杂度</strong>:O(n²) 是分水岭,指数级只对小规模可行。</li>
+<li><strong>NP-hard</strong>:多车调度是 NP-hard,没有银弹,只能靠近似/启发式/分层/滚动重规划/松弛。<strong>但这套应对哲学你后端早就会了。</strong></li>
+</ul>
+
+<div class="section-quiz">
+<strong>✅ 自测(每题答案 4 个字,完全等长)</strong>
+<ol>
+<li>图里面表示"两个地点之间通道"的那个元素,叫什么?</li>
+<li>边上带的数字,表示"走这条通道的代价",这个数字叫什么?</li>
+<li>多车调度问题属于"规模一大就无法快速求最优解"的那类问题,叫什么?</li>
+<li>工业调度面对上述问题,主要采用的"不追求最优、追求够快够好"的算法,统称为什么?</li>
+</ol>
+<p style="color:var(--muted);font-size:.85rem;margin-top:.8rem;">这 4 题是进入 L1 的入场券。全对说明你已经拿到了所有最小数学语言,L1 的算法课你就能无障碍进入了。</p>
+</div>
+
+<div class="callout">
+<span class="callout-title">🎓 L0 阶段即将完成</span>
+答完这课,L0 地基阶段(5 课)就全部通关。届时你会拥有:
+<ul>
+<li>调度系统的全景认知(是什么、由什么组成、为什么难)</li>
+<li>一张「调度 ↔ 后端」对照表 + 翻译能力</li>
+<li>清晰的自我边界(会什么、补什么)</li>
+<li>进入 L1 算法的最小数学语言</li>
+</ul>
+然后我们就进入真正的硬骨头:<strong>L1 单机能力</strong>——从 L1-01 把仓库画成图开始,亲手写第一个路径规划算法。
+</div>
+
+<div class="section-source">
+<strong>🔗 推荐主源</strong><br>
+<a href="https://www.redblobgames.com/pathfinding/a-star/introduction.html">Red Blob Games: A* 入门(中文也能看懂)</a> —— 现在先扫一眼第一节感受一下,不用全懂。等 L1-04 学 A* 时,这是<strong>全网最好的可视化教材</strong>。
+</div>
+
+<div class="section-ask">
+<strong>❓ 有问题随时问。</strong>这课涉及数学概念最多,如果有任何一个词让你卡住(比如「为什么指数级就爆炸」「NP-hard 到底什么意思」),直接问——这块是地基,不能含糊。
+</div>
+
+<div class="lesson-nav">
+  <a href="0004-l0-04-backend-translation.html">← 上一课:L0-04 后端迁移</a>
+  <a class="next" href="0006-l1-01-map-modeling.html">下一课:L1-01 把现实变成图 →</a>
+</div>
+
+</body>
+</html>

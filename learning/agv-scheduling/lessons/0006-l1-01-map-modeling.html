@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>L1-01 · 地图建模:把现实变成图</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .graph-ascii {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: .82rem;
+    line-height: 1.45;
+    background: var(--code-bg);
+    padding: 1rem;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    margin: 1rem 0;
+  }
+  .warehouse {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: .78rem;
+    line-height: 1.35;
+    background: #f7f5ee;
+    padding: 1rem;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    margin: 1rem 0;
+    border: 1px solid var(--rule);
+  }
+  .try-it {
+    border: 2px dashed var(--accent);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    margin: 1.5rem 0;
+    background: #f7fbfd;
+  }
+  .try-it h4 { margin-top: 0; color: var(--accent); }
+</style>
+</head>
+<body>
+
+<h1>L1-01 · 地图建模:把现实变成图</h1>
+
+<div class="lesson-meta">
+  <span class="tag">阶段 L1 单机能力</span>
+  <span class="tag">难度:入门(动手)</span>
+  <span class="tag">前置:L0-05</span>
+  <span class="tag">预计:50 分钟</span>
+</div>
+
+<div class="section-goal">
+  <strong>🎯 这节课你将学会:</strong>看着一个仓库/工厂的平面图,能把它<strong>抽象成节点+边+边权</strong>的图,并用 Python 写出来。这是所有路径规划算法的前提——<strong>没有地图,就没有规划</strong>。本课是 L1 的第一课,也是你第一次动手写调度相关的代码。
+</div>
+
+<h2 id="problem">问题:算法不认识"仓库"</h2>
+
+<p>Dijkstra、A* 这些算法很聪明,但它们只认识一样东西:<strong>图</strong>。它们不知道什么是货架、什么是通道、什么是叉车禁区。所以在让算法工作之前,我们必须先把现实世界<strong>翻译成算法认识的图</strong>。这个过程叫「地图建模」。</p>
+
+<div class="backend-analogy">
+这就是<strong>数据建模</strong>——和你设计数据库 schema 一模一样。现实世界(订单、用户、商品)不能直接存进数据库,你要先抽象成表和字段。地图建模同理:现实仓库不能直接进算法,你要先抽象成节点和边。
+</div>
+
+<h2 id="two-ways">两种建模思路</h2>
+
+<p>L0-05 提过栅格 vs 拓扑,现在展开讲清楚。这是你做地图建模的第一个、也是最重要的决策。</p>
+
+<h3>思路 A:栅格地图(Grid)</h3>
+
+<p>把空间切成大小相等的方格,每格是一个节点,相邻格子之间有边。通常用 0/1 矩阵表示:0=可走,1=障碍。</p>
+
+<figure class="svg-fig">
+<svg viewBox="0 0 360 230" xmlns="http://www.w3.org/2000/svg">
+  <text x="180" y="22" text-anchor="middle" font-size="13" font-weight="600" fill="#0b6e99">简化仓库 10×6 栅格</text>
+  <!-- 网格 -->
+  <g>
+    <!-- 第0行 全障碍 -->
+    <g fill="#d9d9d9" stroke="#999" stroke-width="0.5">
+      <!-- 用循环思维手绘:每格30x30 -->
+    </g>
+  </g>
+  <!-- 障碍格(墙/货架底座)用灰,可走用白底 -->
+  <!-- 行0:全# -->
+  <g font-family="monospace" font-size="13" text-anchor="middle">
+    <!-- 第0行 全障碍 -->
+    <rect x="30" y="35" width="300" height="30" fill="#d9d9d9" stroke="#999" stroke-width="0.5"/>
+    <!-- 第1行 两端# -->
+    <rect x="30" y="65" width="30" height="30" fill="#d9d9d9" stroke="#999" stroke-width="0.5"/>
+    <rect x="60" y="65" width="240" height="30" fill="#fdfdfb" stroke="#ccc" stroke-width="0.5"/>
+    <rect x="300" y="65" width="30" height="30" fill="#d9d9d9" stroke="#999" stroke-width="0.5"/>
+    <!-- 第2行 -->
+    <rect x="30" y="95" width="30" height="30" fill="#d9d9d9" stroke="#999" stroke-width="0.5"/>
+    <rect x="60" y="95" width="30" height="30" fill="#fdfdfb" stroke="#ccc" stroke-width="0.5"/>
+    <rect x="90" y="95" width="60" height="30" fill="#d9d9d9" stroke="#999" stroke-width="0.5"/>
+    <rect x="150" y="95" width="60" height="30" fill="#fdfdffb" stroke="#ccc" stroke-width="0.5"/>
+    <rect x="210" y="95" width="60" height="30" fill="#d9d9d9" stroke="#999" stroke-width="0.5"/>
+    <rect x="270" y="95" width="30" height="30" fill="#fdfdfb" stroke="#ccc" stroke-width="0.5"/>
+    <rect x="300" y="95" width="30" height="30" fill="#d9d9d9" stroke="#999" stroke-width="0.5"/>
+    <!-- 第3行 S 在(1,3) -->
+    <rect x="30" y="125" width="30" height="30" fill="#d9d9d9" stroke="#999" stroke-width="0.5"/>
+    <rect x="60" y="125" width="30" height="30" fill="#e7f2f8" stroke="#0b6e99" stroke-width="1.5"/>
+    <text x="75" y="145" fill="#0b6e99" font-weight="700">S</text>
+    <rect x="90" y="125" width="30" height="30" fill="#fdfdfb" stroke="#ccc" stroke-width="0.5"/>
+    <rect x="120" y="125" width="30" height="30" fill="#d9d9d9" stroke="#999" stroke-width="0.5"/>
+    <rect x="150" y="125" width="60" height="30" fill="#fdfdfb" stroke="#ccc" stroke-width="0.5"/>
+    <rect x="210" y="125" width="30" height="30" fill="#d9d9d9" stroke="#999" stroke-width="0.5"/>
+    <rect x="240" y="125" width="30" height="30" fill="#fdfdfb" stroke="#ccc" stroke-width="0.5"/>
+    <rect x="270" y="125" width="30" height="30" fill="#fef3e2" stroke="#b54708" stroke-width="1.5"/>
+    <text x="285" y="145" fill="#b54708" font-weight="700">G</text>
+    <rect x="300" y="125" width="30" height="30" fill="#d9d9d9" stroke="#999" stroke-width="0.5"/>
+    <!-- 第4行 -->
+    <rect x="30" y="155" width="30" height="30" fill="#d9d9d9" stroke="#999" stroke-width="0.5"/>
+    <rect x="60" y="155" width="60" height="30" fill="#fdfdfb" stroke="#ccc" stroke-width="0.5"/>
+    <rect x="120" y="155" width="30" height="30" fill="#d9d9d9" stroke="#999" stroke-width="0.5"/>
+    <rect x="150" y="155" width="60" height="30" fill="#fdfdfb" stroke="#ccc" stroke-width="0.5"/>
+    <rect x="210" y="155" width="30" height="30" fill="#d9d9d9" stroke="#999" stroke-width="0.5"/>
+    <rect x="240" y="155" width="60" height="30" fill="#fdfdfb" stroke="#ccc" stroke-width="0.5"/>
+    <rect x="300" y="155" width="30" height="30" fill="#d9d9d9" stroke="#999" stroke-width="0.5"/>
+    <!-- 第5行 全# -->
+    <rect x="30" y="185" width="300" height="30" fill="#d9d9d9" stroke="#999" stroke-width="0.5"/>
+  </g>
+  <!-- 图例 -->
+  <rect x="40" y="200" width="14" height="14" fill="#d9d9d9" stroke="#999"/>
+  <text x="58" y="212" font-size="11" fill="#595959">障碍(墙/货架)</text>
+  <rect x="160" y="200" width="14" height="14" fill="#fdfdfb" stroke="#ccc"/>
+  <text x="178" y="212" font-size="11" fill="#595959">可走</text>
+</svg>
+<figcaption>栅格地图:空间切成方格,灰=障碍,白=可走,S=起点,G=目标</figcaption>
+</figure>
+
+<p><strong>优点</strong>:精细,能表示任意形状障碍,适合局部避障。<br>
+<strong>缺点</strong>:节点极多(1000㎡ 仓库切成 20cm 格 = 25000 节点),算法慢。<strong>关键问题:很多节点是"无意义的空地"</strong>,算法要在上面白白搜索。</p>
+
+<h3>思路 B:拓扑图(Topological)⭐ 工业主流</h3>
+
+<p>只在<strong>有意义的位置</strong>(路口、货架位、充电桩、停靠点)设节点,通道用边连接。</p>
+
+<figure class="svg-fig">
+<svg viewBox="0 0 460 250" xmlns="http://www.w3.org/2000/svg">
+  <text x="230" y="22" text-anchor="middle" font-size="13" font-weight="600" fill="#0b6e99">简化仓库俯视图(拓扑视角)</text>
+
+  <!-- 区域标注 -->
+  <text x="90" y="45" text-anchor="middle" font-size="10" fill="#999">[货架区]</text>
+  <text x="370" y="45" text-anchor="middle" font-size="10" fill="#999">[货架区]</text>
+  <text x="60" y="232" text-anchor="middle" font-size="10" fill="#999">[入口]</text>
+  <text x="240" y="232" text-anchor="middle" font-size="10" fill="#999">[充电桩]</text>
+  <text x="390" y="232" text-anchor="middle" font-size="10" fill="#999">[拣货位]</text>
+
+  <!-- 边 -->
+  <g stroke="#888" stroke-width="2" fill="none">
+    <!-- 左货架区 -->
+    <line x1="90" y1="100" x2="90" y2="140"/>
+    <line x1="60" y1="140" x2="120" y2="140"/>
+    <line x1="60" y1="140" x2="60" y2="180"/>
+    <line x1="60" y1="140" x2="160" y2="140"/>
+    <!-- 连接桥 -->
+    <line x1="160" y1="140" x2="240" y2="140"/>
+    <!-- 右货架区 -->
+    <line x1="240" y1="100" x2="240" y2="140"/>
+    <line x1="210" y1="100" x2="270" y2="100"/>
+    <line x1="270" y1="100" x2="270" y2="140"/>
+    <line x1="270" y1="140" x2="370" y2="140"/>
+    <line x1="370" y1="100" x2="370" y2="140"/>
+    <!-- 下连 -->
+    <line x1="60" y1="180" x2="60" y2="210"/>
+    <line x1="240" y1="140" x2="240" y2="210"/>
+    <line x1="370" y1="140" x2="390" y2="140"/>
+    <line x1="390" y1="140" x2="390" y2="210"/>
+  </g>
+
+  <!-- 节点 -->
+  <g>
+    <circle cx="60" cy="180" r="13" class="node-circle"/><text x="60" y="184" text-anchor="middle" font-size="9" class="node-label">N0</text>
+    <circle cx="60" cy="140" r="13" class="node-circle"/><text x="60" y="144" text-anchor="middle" font-size="9" class="node-label">N1</text>
+    <circle cx="90" cy="100" r="13" class="node-circle"/><text x="90" y="104" text-anchor="middle" font-size="9" class="node-label">N2</text>
+    <circle cx="120" cy="100" r="13" class="node-circle"/><text x="120" y="104" text-anchor="middle" font-size="9" class="node-label">N3</text>
+    <circle cx="160" cy="140" r="13" class="node-circle"/><text x="160" y="144" text-anchor="middle" font-size="9" class="node-label">N4</text>
+    <circle cx="240" cy="140" r="13" class="node-circle"/><text x="240" y="144" text-anchor="middle" font-size="9" class="node-label">N5</text>
+    <circle cx="210" cy="100" r="13" class="node-circle"/><text x="210" y="104" text-anchor="middle" font-size="9" class="node-label">N6</text>
+    <circle cx="270" cy="100" r="13" class="node-circle"/><text x="270" y="104" text-anchor="middle" font-size="9" class="node-label">N7</text>
+    <circle cx="370" cy="100" r="13" class="node-circle"/><text x="370" y="104" text-anchor="middle" font-size="9" class="node-label">N8</text>
+    <circle cx="240" cy="210" r="13" class="node-circle"/><text x="240" y="214" text-anchor="middle" font-size="9" class="node-label">N9</text>
+    <circle cx="390" cy="210" r="13" class="node-circle"/><text x="390" y="214" text-anchor="middle" font-size="9" class="node-label">N10</text>
+  </g>
+</svg>
+<figcaption>拓扑图:只在关键点(路口/货架位/充电桩)设节点,通道为边。节点稀疏,算法快</figcaption>
+</figure>
+
+<p><strong>优点</strong>:节点少(几十到几百),算法快,结构清晰,符合 AGV「点对点搬运」的本质。<br>
+<strong>缺点</strong>:建图要人工标注关键点(或半自动),精细避障还要配栅格。</p>
+
+<div class="callout">
+<span class="callout-title">📌 工业实践:两者结合</span>
+绝大多数工业 AGV/AMR 系统都用<strong>双层</strong>:
+<ul>
+<li><strong>拓扑图做全局规划</strong>:从 N0 到 N10,用 A* 找出节点序列(快)</li>
+<li><strong>栅格图做局部避障</strong>:在每两个节点之间,用栅格精细绕开临时障碍(准)</li>
+</ul>
+这就是「<strong>全局粗规划 + 局部细规划</strong>」的经典架构。本课先专注拓扑图(因为它更体现建模思想),栅格在 L1-04 A* 时会再用到。
+</div>
+
+<h2 id="modeling-steps">拓扑图建模:四步法</h2>
+
+<p>看着一个真实仓库,怎么一步步变成图?这是你要练的技能:</p>
+
+<h3>第 1 步:识别"关键点"→ 节点</h3>
+
+<p>问自己:AGV 在哪些位置会<strong>停下来做某事</strong>?这些位置就是节点:</p>
+<ul>
+<li><strong>路口</strong>(通道交汇处,要决策往哪走)</li>
+<li><strong>任务点</strong>(货架前、拣货位、上料点——任务的起终点)</li>
+<li><strong>资源点</strong>(充电桩、等待区、缓冲区)</li>
+<li><strong>出入口</strong>(电梯口、门、月台)</li>
+</ul>
+
+<h3>第 2 步:识别"通道"→ 边</h3>
+
+<p>两个节点之间,AGV <strong>能直接走过去</strong>(中途不停、不拐弯),就连一条边。</p>
+
+<h3>第 3 步:给边加权重</h3>
+
+<p>权重 = 走这条边的代价。最常见是<strong>物理距离</strong>,但也可以是:</p>
+<ul>
+<li><strong>时间</strong>(考虑这段路限速不同)</li>
+<li><<strong>能耗</strong>(上坡段权重大)</li>
+<li><strong>风险</strong>(人机混行区权重稍大,鼓励绕开)</li>
+</ul>
+
+<h3>第 4 步:决定有向/无向</h3>
+
+<p>问:这条通道能<strong>双向走</strong>吗?如果只能单向(比如窄通道、防死锁设计),就用有向边。</p>
+
+<div class="try-it">
+<h4>🔧 动手练习 1:把一个简化仓库画成图</h4>
+<p>想象一个 L 形小仓库:入口在左下角,有一条主通道向右,到中间分叉,向上通向货架 A,向右通向货架 B。充电桩在入口旁边。</p>
+<p><strong>你的任务</strong>:在纸上(或脑里)标出 5~6 个节点,画出边,并给每条边估个距离。先自己画,再看下面的参考答案。</p>
+<details>
+<summary>👉 点开看参考答案(先自己画完再看)</summary>
+<figure class="svg-fig">
+<svg viewBox="0 0 440 220" xmlns="http://www.w3.org/2000/svg">
+  <!-- 边 -->
+  <g stroke="#888" stroke-width="2" fill="none">
+    <line x1="80" y1="150" x2="220" y2="150"/>   <!-- N0-N1 -->
+    <line x1="80" y1="150" x2="80" y2="190"/>     <!-- N0-N4 -->
+    <line x1="220" y1="150" x2="220" y2="60"/>    <!-- N1-N3 单向 -->
+    <line x1="220" y1="150" x2="360" y2="150"/>   <!-- N1-N2 -->
+  </g>
+  <!-- 单向箭头 N1->N3 -->
+  <line x1="220" y1="80" x2="220" y2="72" stroke="#b54708" stroke-width="2.5" marker-end="url(#arr-s)"/>
+  <defs><marker id="arr-s" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#b54708"/></marker></defs>
+
+  <!-- 边权 -->
+  <text x="145" y="143" text-anchor="middle" font-size="12" fill="#595959" font-weight="600">5</text>
+  <text x="95" y="172" font-size="12" fill="#595959" font-weight="600">2</text>
+  <text x="232" y="108" font-size="12" fill="#b54708" font-weight="600">8</text>
+  <text x="288" y="143" text-anchor="middle" font-size="12" fill="#595959" font-weight="600">6</text>
+
+  <!-- 节点 -->
+  <circle cx="80" cy="150" r="16" class="node-circle"/>
+  <text x="80" y="154" text-anchor="middle" font-size="9" class="node-label">N0</text>
+  <text x="80" y="210" text-anchor="middle" font-size="10" fill="#595959">入口</text>
+
+  <circle cx="220" cy="150" r="16" class="node-circle"/>
+  <text x="220" y="154" text-anchor="middle" font-size="9" class="node-label">N1</text>
+  <text x="220" y="174" text-anchor="middle" font-size="9" fill="#595959">主通道中点</text>
+
+  <circle cx="220" cy="60" r="16" class="node-circle"/>
+  <text x="220" y="64" text-anchor="middle" font-size="9" class="node-label">N3</text>
+  <text x="220" y="40" text-anchor="middle" font-size="10" fill="#595959">货架A(单向终点)</text>
+
+  <circle cx="80" cy="190" r="14" class="node-circle"/>
+  <text x="80" y="194" text-anchor="middle" font-size="8" class="node-label">N4</text>
+  <text x="30" y="194" font-size="9" fill="#595959">充电桩</text>
+
+  <circle cx="360" cy="150" r="16" class="node-circle"/>
+  <text x="360" y="154" text-anchor="middle" font-size="9" class="node-label">N2</text>
+  <text x="360" y="174" text-anchor="middle" font-size="10" fill="#595959">货架B</text>
+</svg>
+<figcaption>参考答案:N0→N1(5)、N0→N4(2)、N1→N3(8,单向窄通道)、N1→N2(6)</figcaption>
+</figure>
+<p>关键不是数字对不对,而是你<strong>有没有分清:节点是关键点、边是直达通道、边权是代价、有向是无单向通道</strong>。</p>
+</details>
+</div>
+
+<h2 id="code">用 Python 写出来</h2>
+
+<p>现在把图画进代码。这就是 L0-05 讲过的「邻接表」——你应该觉得眼熟。</p>
+
+<pre><code># map_model.py —— 一个最小的拓扑地图模型
+# 用嵌套字典表示:每个节点 → {邻居: 边权}
+
+warehouse_map = {
+    "N0_入口":  {"N1_主通道中点": 5, "N4_充电桩": 2},
+    "N1_主通道中点": {"N3_货架A": 8, "N2_货架B": 6},
+    "N2_货架B": {"N1_主通道中点": 6},   # 双向,所以有回边
+    "N3_货架A": {},                      # 单向终点,没有出边(死胡同设计)
+    "N4_充电桩": {"N0_入口": 2},
+}
+
+def neighbors(node, graph):
+    """返回某节点的所有邻居及边权 —— 后面所有算法都要用这个"""
+    return graph.get(node, {})
+
+# 测试一下
+if __name__ == "__main__":
+    for node in warehouse_map:
+        print(f"{node} 的邻居: {neighbors(node, warehouse_map)}")</code></pre>
+
+<p>运行它,你会看到每个节点能去哪、代价多少。这就是地图模型的全部——<strong>没有黑魔法,就是一张表</strong>。</p>
+
+<div class="backend-analogy">
+这张表就是你写过无数次的 <code>service_dependencies</code> 或 <code>routing_table</code>。调度的地图,本质上就是一张「<strong>物理空间的 routing table</strong>」。
+</div>
+
+<h2 id="dynamic">进阶:动态权重(伏笔)</h2>
+
+<p>真实系统里,边权不是静态的。它会因为<strong>实时情况</strong>变化:</p>
+
+<ul>
+<li><strong>拥堵</strong>:某段路车太多,临时加大权重,让后续车绕行</li>
+<li><strong>封锁</strong>:某段路在维修,权重设为 ∞(等于删边)</li>
+<li><strong>电量</strong>:对低电量车,上坡段的"能耗权重"更大</li>
+</ul>
+
+<pre><code># 动态权重的简单实现:权重是个函数,不是固定值
+def edge_weight(from_node, to_node, context):
+    base = warehouse_map[from_node][to_node]          # 静态距离
+    congestion = context.get_congestion(from_node, to_node)  # 实时拥堵系数
+    blocked = context.is_blocked(from_node, to_node)   # 是否封锁
+    if blocked:
+        return float('inf')                            # 封锁 = 不可走
+    return base * (1 + congestion)                     # 拥堵加成
+
+# context 是个对象,封装了"当前世界的实时状态"
+# 后面 L3-02 会讲这个 context 怎么由"状态上报"实时更新</code></pre>
+
+<div class="callout">
+<span class="callout-title">🔑 关键设计思想</span>
+把权重<strong>从常量变成函数</strong>,是地图模型从"玩具"走向"工业级"的关键一步。它让同一张图能反映<strong>实时世界</strong>。这就是为什么 L0-03 全景图里,「⑨车队状态」要持续喂给「⑧地图管理」——实时状态会改变图的权重,进而改变规划结果。
+</div>
+
+<h2 id="humanoid">人形伏笔:地图会变成什么样</h2>
+
+<div class="backend-analogy">
+你做人形,这张图会<strong>升级</strong>:
+<ul>
+<li><strong>从 2D 拓扑 → 3D + 语义地图</strong>:不只记"能走到哪",还要记"这是桌子(能放东西)、这是抽屉(能拉开)、这是把手(能抓)"</li>
+<li><strong>可达性图(Reachability)</strong>:不只"脚能走到",还有"手能伸到哪"——人形有手臂,工作空间是 3D 的</li>
+<li><strong>语义节点</strong>:节点不只是位置,还带属性(咖啡机、门、沙发),供<strong>技能编排</strong>使用</li>
+</ul>
+但底层还是图,还是邻接表,还是 A*。你学的拓扑建模能力<strong>直接可迁移</strong>,只是节点和边的语义更丰富。这是 L4-02 会深挖的点。
+</div>
+
+<h2 id="recap">小结</h2>
+
+<ul>
+<li>算法只认图,所以第一步是把现实<strong>建模成图</strong>(类比数据库 schema 设计)。</li>
+<li>两种思路:栅格(精细但慢)、拓扑(稀疏但快);工业实践是<strong>拓扑做全局 + 栅格做局部</strong>。</li>
+<li>拓扑建模四步:识别关键点→节点、识别通道→边、加边权、决定有向/无向。</li>
+<li>代码实现就是邻接表(一张字典),和你写的路由表/依赖图同构。</li>
+<li>动态权重(权重变函数)是走向工业级的关键——让图能反映实时世界。</li>
+</ul>
+
+<div class="section-quiz">
+<strong>✅ 自测(每题答案 4 个字,完全等长)</strong>
+<ol>
+<li>栅格和拓扑两种地图里,工业 AGV 做全局规划主要用的是哪一种?</li>
+<li>拓扑建模的第一步"识别关键点",其中"路口、货架位、充电桩"统称为什么?</li>
+<li>让边权能根据拥堵/封锁实时变化的这个设计,叫什么权重?</li>
+<li>代码里"每个节点记着它能去哪些邻居"的这种存储结构,叫什么表?</li>
+</ol>
+</div>
+
+<div class="try-it">
+<h4>🔧 动手练习 2(强烈建议做)</h4>
+<p>把上面的 <code>warehouse_map</code> 代码实际跑起来(复制到 .py 文件,或用在线 Python 环境)。</p>
+<p>然后<strong>自己扩展</strong>:再加 2 个节点(比如 N5_月台、N6_等待区),给它们连边、赋权。改完后运行,确认你的新节点邻居打印正确。</p>
+<p style="color:var(--muted);font-size:.9rem;">这一步看起来简单,但「亲手让地图跑起来」和「只看懂」差别巨大。L1 全程都会在这个地图模型上叠加算法,你的地图会成为后面所有课的实验台。</p>
+</div>
+
+<div class="section-source">
+<strong>🔗 推荐主源</strong><br>
+<a href="https://www.redblobgames.com/pathfinding/a-star/introduction.html">Red Blob Games:路径规划入门</a> —— 看第一节"地图表示法",它用栅格图演示,但思想(把空间变图)和拓扑完全一致。这是 L1 全程的伴读教材。
+</div>
+
+<div class="section-ask">
+<strong>❓ 有问题随时问。</strong>特别鼓励你把<strong>练习 2 的扩展结果</strong>发我看看——你的地图建得怎么样,直接决定下一课 L1-02(BFS/DFS)你能不能顺畅上手。如果你做人形,也可以想想:你见过的机器人地图,是不是也长这个样?有没有语义/3D 的影子?
+</div>
+
+<div class="lesson-nav">
+  <a href="0005-l0-05-math-primer.html">← 上一课:L0-05 数学前置</a>
+  <a class="next" href="0007-l1-02-bfs-dfs.html">下一课:L1-02 搜索入门 BFS/DFS →</a>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>L1-03 · 单车路径规划:Dijkstra 算法</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .trace {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: .8rem;
+    line-height: 1.6;
+    background: var(--code-bg);
+    padding: 1rem;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    margin: 1rem 0;
+  }
+  .trace .step { color: var(--accent); font-weight: 600; }
+  .trace .relax { color: #5a8a2a; font-weight: 600; }
+  .trace .note { color: var(--muted); }
+  .trace .best { background: #fff3b0; }
+  .try-it {
+    border: 2px dashed var(--accent);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    margin: 1.5rem 0;
+    background: #f7fbfd;
+  }
+  .try-it h4 { margin-top: 0; color: var(--accent); }
+  .diff-table td:first-child { width: 18%; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>L1-03 · 单车路径规划:Dijkstra 算法</h1>
+
+<div class="lesson-meta">
+  <span class="tag">阶段 L1 单机能力</span>
+  <span class="tag">难度:中等(动手)</span>
+  <span class="tag">前置:L1-02</span>
+  <span class="tag">预计:60 分钟</span>
+</div>
+
+<div class="section-goal">
+  <strong>🎯 这节课你将学会:</strong>亲手实现并理解 Dijkstra 算法——它解决 L1-02 留下的痛点「BFS 忽略边权,错过代价更低的路」。你会看到 Dijkstra 其实就是<strong>把 BFS 的普通队列换成「按累计代价排序的优先队列」</strong>,加上一个叫「松弛」的新动作。学完这课,你能在一个带权图上,找出从起点到任意点的<strong>累计代价最小</strong>的路径。
+</div>
+
+<h2 id="one-trick">Dijkstra 的核心:一招之差</h2>
+
+<p>上一课你已经知道:搜索算法的本质是"按什么顺序扩展节点"。现在请这样理解 Dijkstra:</p>
+
+<blockquote>
+<p><strong>Dijkstra = BFS,但把「先进先出队列」换成「按累计代价排序的优先队列」。</strong></p>
+</blockquote>
+
+<table class="diff-table">
+<thead><tr><th>算法</th><th>用什么结构</th><th>按什么顺序扩展节点</th></tr></thead>
+<tbody>
+<tr><td>BFS</td><td>普通队列(FIFO)</td><td>谁先入队谁先出 → <strong>按步数(层级)</strong></td></tr>
+<tr><td>Dijkstra</td><td>优先队列(按 g 排序)</td><td><strong>累计代价 g 最小的先出</strong></td></tr>
+<tr><td>A*(下一课)</td><td>优先队列(按 f=g+h)</td><td>f 最小的先出(加方向感)</td></tr>
+</tbody>
+</table>
+
+<p>就这一处改动,BFS 从"找步数最少"升级成"找<strong>累计代价最小</strong>"。这就是 Dijkstra。</p>
+
+<div class="backend-analogy">
+Dijkstra 就是<strong>网络路由协议 OSPF 的核心</strong>。每个路由器用 Dijkstra 算"到其他网络的最短(代价最低)路径",代价就是链路的 metric(带宽/延迟)。你天天用的互联网,路由表就是这么算出来的。所以你不是在学新东西,你在学互联网路由背后的算法。
+</div>
+
+<h2 id="new-concept">唯一的新概念:松弛(Relaxation)</h2>
+
+<p>Dijkstra 相比 BFS,除了换队列,只多了一个动作,叫<strong>松弛</strong>。这是整节课唯一需要认真理解的新东西。</p>
+
+<h3>松弛是什么</h3>
+
+<p>想象你对每个节点维护一个「<strong>当前已知的到它的最小代价</strong>」,记作 <code>g[node]</code>。一开始除了起点(g=0),其他都是 ∞(未知)。</p>
+
+<p>当你从节点 <code>u</code> 探索到它的邻居 <code>v</code> 时,你发现了一条<strong>可能更短</strong>的路:<code>g[u] + 边权(u,v)</code>。如果这个值<strong>比 g[v] 当前记录的小</strong>,就更新 g[v]。这个"试试能不能更新得更小"的动作,就叫<strong>松弛</strong>。</p>
+
+<pre><code># 松弛操作的伪代码 —— 就这么几行
+def relax(u, v, edge_weight):
+    if g[u] + edge_weight < g[v]:      # 发现更短的路?
+        g[v] = g[u] + edge_weight       # 更新!
+        parent[v] = u                   # 记住"从哪来的",用于回溯路径
+        # 把 v 以新的 g 值放进优先队列,等会儿可能再扩展它</code></pre>
+
+<div class="callout">
+<span class="callout-title">🔑 为什么叫"松弛"</span>
+想象 g[v] 是一根绷紧的弦,代表"目前知道的到 v 的代价"。每发现一条更短的路,弦就<strong>松一点</strong>(代价降一点)。当没有更短的路可发现时,弦彻底松弛下来,g[v] 就到了最优值。这个物理直觉比死记定义有用得多。
+</div>
+
+<h2 id="full-algo">完整 Dijkstra(带可跑代码)</h2>
+
+<p>现在把"优先队列 + 松弛"拼起来,就是完整的 Dijkstra。下面这段代码你可以直接跑:</p>
+
+<pre><code># dijkstra.py
+import heapq
+
+def dijkstra(graph, start, goal):
+    """
+    graph: 邻接表,{节点: {邻居: 边权}}
+    返回:(最短代价, 路径列表)
+    """
+    g = {start: 0}                  # g[node] = 起点到 node 的已知最小代价
+    parent = {start: None}          # 用于回溯路径
+    pq = [(0, start)]               # 优先队列:(累计代价, 节点),堆自动按代价排序
+    visited = set()
+
+    while pq:
+        cost_u, u = heapq.heappop(pq)   # 取出当前累计代价最小的节点
+
+        if u in visited:                # 已经处理过,跳过(可能有旧的高代价副本)
+            continue
+        visited.add(u)
+
+        if u == goal:                   # 找到目标,回溯路径
+            path = []
+            node = goal
+            while node is not None:
+                path.append(node)
+                node = parent[node]
+            return cost_u, path[::-1]   # 反转,从起点到终点
+
+        # 对每个邻居做松弛
+        for v, w in graph.get(u, {}).items():
+            new_cost = cost_u + w       # 经过 u 到 v 的代价
+            if v not in g or new_cost < g[v]:   # 松弛条件:发现更短
+                g[v] = new_cost
+                parent[v] = u
+                heapq.heappush(pq, (new_cost, v))
+
+    return None, []  # 不可达</code></pre>
+
+<h2 id="trace">亲手追踪:Dijkstra 在我们的地图上跑一遍</h2>
+
+<p>用 L1-02 那张图,从「入口」找「货架3」。这是本课最重要的一段——请对照上面的代码和图,一步一步看:</p>
+
+<pre><code>graph = {
+    "入口":  {"主道": 5},
+    "主道":  {"入口": 5, "岔口A": 3, "岔口B": 6},
+    "岔口A": {"主道": 3, "货架1": 4},
+    "岔口B": {"主道": 6, "货架2": 2, "货架3": 7},
+    "货架1": {"岔口A": 4},
+    "货架2": {"岔口B": 2, "货架3": 3},
+    "货架3": {"岔口B": 7, "货架2": 3},
+}</code></pre>
+
+<div class="trace"><span class="step">初始</span>  g={入口:0}, pq=[(0,入口)], visited={}
+<span class="step">第1轮</span>  弹出 <span class="best">(0, 入口)</span>
+        松弛邻居 主道: new=0+5=5 < ∞ → <span class="relax">g[主道]=5, parent[主道]=入口</span>
+        pq=[(5,主道)]
+<span class="step">第2轮</span>  弹出 <span class="best">(5, 主道)</span>  ← 累计代价最小的先出!这就是 Dijkstra 的精髓
+        松弛邻居:
+          入口: 5+5=10 > g[入口]=0,不更新
+          岔口A: 5+3=8 < ∞ → <span class="relax">g[岔口A]=8</span>
+          岔口B: 5+6=11 < ∞ → <span class="relax">g[岔口B]=11</span>
+        pq=[(8,岔口A), (11,岔口B)]
+<span class="step">第3轮</span>  弹出 <span class="best">(8, 岔口A)</span>  ← 注意:8 < 11,所以岔口A 先于岔口B 出队
+        松弛邻居:
+          主道: 8+3=11 > g[主道]=5,不更新
+          货架1: 8+4=12 < ∞ → <span class="relax">g[货架1]=12</span>
+        pq=[(11,岔口B), (12,货架1)]
+<span class="step">第4轮</span>  弹出 <span class="best">(11, 岔口B)</span>
+        松弛邻居:
+          主道: 11+6=17 > 5,不更新
+          货架2: 11+2=13 < ∞ → <span class="relax">g[货架2]=13</span>
+          货架3: 11+7=18 < ∞ → <span class="relax">g[货架3]=18</span>  ← 首次发现货架3,代价18
+        pq=[(12,货架1), (13,货架2), (18,货架3)]
+<span class="step">第5轮</span>  弹出 <span class="best">(12, 货架1)</span> → 无有效松弛(邻居都更贵)
+<span class="step">第6轮</span>  弹出 <span class="best">(13, 货架2)</span>
+        松弛邻居:
+          岔口B: 13+2=15 > 11,不更新
+          货架3: <span class="relax">13+3=16 < g[货架3]=18!</span>  ← 🎯 松弛成功!更新!
+          → g[货架3]=16, parent[货架3]=货架2
+          → 把 (16,货架3) 推入堆
+        pq=[(16,货架3), (18,货架3)]  ← 注意:有两个货架3,代价不同
+<span class="step">第7轮</span>  弹出 <span class="best">(16, 货架3)</span>  ← 16 < 18,小的先出!
+        u=货架3 == 目标!回溯路径:
+        货架3 ← 货架2 ← 岔口B ← 主道 ← 入口
+        <span class="relax">✅ 返回:代价 16,路径 [入口,主道,岔口B,货架2,货架3]</span></div>
+
+<h3>对照 L1-02:看到 Dijkstra 赢在哪了吗?</h3>
+
+<div class="callout">
+<span class="callout-title">🎉 这就是 Dijkstra 的威力</span>
+L1-02 里 BFS 找的路是「入口→主道→岔口B→货架3」,代价 <strong>18</strong>(3 步)。<br>
+Dijkstra 找的路是「入口→主道→岔口B→货架2→货架3」,代价 <strong>16</strong>(4 步)。<br><br>
+<strong>多走一步,但总代价更低!</strong> 因为 Dijkstra 在第 6 轮通过松弛发现了"绕经货架2更便宜"这个事实。BFS 永远发现不了,因为它不看代价。这就是"按累计代价排序"vs"按步数"的本质差距。
+</div>
+
+<h2 id="why-optimal">为什么 Dijkstra 能保证最优?</h2>
+
+<p>这是 Dijkstra 最神奇的特性,我用一句话给你讲透,不用数学证明:</p>
+
+<blockquote>
+<p><strong>因为它总是先扩展"累计代价最小"的节点。</strong> 所以当一个节点第一次被弹出(被"确定")时,它的 g 值已经不可能再被任何后来的路超越了——因为任何后来的路都必须经过一个"当前代价更大"的节点,加边只会更大。</p>
+</blockquote>
+
+<div class="backend-analogy">
+这就是<strong>单调性</strong>。类比:你从公司开车回家,如果你总是先探索"距离最近的路口",那么你第一次到达家门口时,记录的距离一定是全局最短——因为任何绕远路都只会让你累计更远。
+</div>
+
+<h2 id="limitation">Dijkstra 的局限(为 A* 铺垫)</h2>
+
+<p>Dijkstra 解决了"忽略边权"的问题,但<strong>没解决"没有方向感"的问题</strong>。看这张图:</p>
+
+<div class="trace">起点 S ──────────── 目标 G
+       ↑
+       │ 向四面八方搜索,Dijkstra 会把整个图都翻一遍
+       │ 哪怕目标明显在右边,它也会先去探索左边
+       ↓
+     (大片无关区域)</div>
+
+<p>Dijkstra 是<strong>无方向</strong>的——它不知道目标在哪,只能老老实实按代价从小到大全图扩散。在大地图上,它会<strong>搜索大量和目标无关的区域</strong>,浪费计算。</p>
+
+<p>这就是 A* 要解决的:加一个<strong>启发函数 h</strong>,给搜索一个"往目标方向使劲"的方向感。下一课 L1-04 就是它。</p>
+
+<div class="try-it">
+<h4>🔧 动手练习(请实际运行)</h4>
+<ol>
+<li>把上面的 <code>dijkstra</code> 函数 + <code>graph</code> 存成 <code>dijkstra.py</code>,运行 <code>dijkstra(graph, "入口", "货架3")</code>。</li>
+<li>确认你得到 <code>(16, ['入口', '主道', '岔口B', '货架2', '货架3'])</code>。</li>
+<li><strong>思考题</strong>:试试 <code>dijkstra(graph, "入口", "货架1")</code>,把返回的路径和代价告诉我。然后想一想:<strong>为什么 Dijkstra 返回的路径里没有出现"货架2→货架3"这种绕路?</strong>把你想到的告诉我。</li>
+</ol>
+<p style="color:var(--muted);font-size:.9rem;">第 3 题考的是你对"最优性"的理解——这是算法短板区域,动手跑 + 思考能帮你把概念坐实。如果你的解释里能提到"因为任何绕路都会让累计代价更大,而 Dijkstra 总选代价最小的",那你就真懂了。</p>
+</div>
+
+<h2 id="humanoid">人形伏笔</h2>
+
+<div class="backend-analogy">
+Dijkstra 在人形/具身里依然是基础工具,但有两个升级方向:
+<ul>
+<li><strong>配置空间(Config Space)</strong>:人形不是 2D 点,它的"状态"是几十个关节角度的组合。在这个高维空间里跑 Dijkstra,搜索会爆炸——这是为什么需要 A* 和 RRT(L1-06)。</li>
+<li><strong>多目标代价</strong>:人形的"代价"不只是距离,还有能耗、稳定度、避让人。代价函数变复杂,但 Dijkstra 框架不变。</li>
+</ul>
+所以 Dijkstra 是地基,人形是在地基上换"更复杂的图和代价函数"。
+</div>
+
+<h2 id="recap">小结</h2>
+
+<ul>
+<li>Dijkstra = BFS + 把队列换成「按累计代价排序的优先队列」+ 松弛操作。</li>
+<li><strong>松弛</strong>:发现到某节点更短的路时,更新它的 g 值和来源。</li>
+<li>Dijkstra 保证最优:因为它总先扩展代价最小的节点,第一次弹出即最优。</li>
+<li>解决了 BFS 忽略边权的痛点(L1-02 案例:代价 18 → 16)。</li>
+<li><strong>未解决的痛点:无方向感</strong>,大图上全图扩散,浪费——这是 A* 要解决的。</li>
+</ul>
+
+<div class="section-quiz">
+<strong>✅ 自测(每题答案 4 个字,完全等长)</strong>
+<ol>
+<li>Dijkstra 相比 BFS,把普通队列换成了什么队列?</li>
+<li>发现"经过 u 到 v 比原来记录的更短"并更新的动作,叫什么?</li>
+<li>Dijkstra 每次从优先队列里取出什么样的节点?(累计代价__)</li>
+<li>Dijkstra 没有方向感、会全图扩散,这个局限催生了哪个算法?</li>
+</ol>
+</div>
+
+<div class="section-source">
+<strong>🔗 推荐主源</strong><br>
+<a href="https://www.redblobgames.com/pathfinding/a-star/introduction.html">Red Blob Games:Dijkstra 可视化</a> —— 看它如何用动画展示 Dijkstra "按代价从小到大扩散"。对比着看 BFS 章节,你会立刻明白两者的差别。这是 L1 全程伴读教材。
+</div>
+
+<div class="section-ask">
+<strong>❓ 有问题随时问。</strong>特别想看你<strong>练习第 3 题</strong>的答案——为什么 Dijkstra 不会给出绕路。这是验证你对"最优性"理解的关键。如果代码没跑通也告诉我,我们一起看。
+</div>
+
+<div class="lesson-nav">
+  <a href="0007-l1-02-bfs-dfs.html">← 上一课:L1-02 BFS/DFS</a>
+  <a class="next" href="0009-l1-04-astar.html">下一课:L1-04 A* 算法 →</a>
+</div>
+
+</body>
+</html>

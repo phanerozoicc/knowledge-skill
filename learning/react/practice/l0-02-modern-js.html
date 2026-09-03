@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>练习 · L0-02 现代 JS 五连</title>
+<style>
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 680px; margin: 2rem auto; padding: 0 1rem; line-height: 1.7; }
+  h1 { font-size: 1.4rem; }
+  h2 { font-size: 1.1rem; margin-top: 1.8rem; }
+  ol { padding-left: 1.4rem; }
+  li { margin: .2rem 0; }
+  code { background: #f5f3ee; padding: .1em .35em; border-radius: 3px; font-size: .92em; }
+  .todo { color: #b54708; }
+  .hint { color: #595959; font-size: .9rem; }
+</style>
+</head>
+<body>
+
+<h1>🔧 L0-02 动手:现代 JS 五连</h1>
+
+<p><strong>怎么跑</strong>:直接用浏览器打开本文件,F12 打开控制台(Console)。把下面 5 个 TODO 依次完成,刷新页面看「结果区」和控制台输出。</p>
+<p><strong>规则</strong>:全部用现代 JS(解构/展开/map/filter/可选链),一个 <code>for</code> 循环都不许写。卡住超过 10 分钟就看提示,看完自己重写一遍。</p>
+
+<h2>数据</h2>
+
+<pre><code>tasks : 一批机器人任务(有 done 标记)
+robot : 一台 AGV 的状态(嵌套 + 可能为 null 的字段)</code></pre>
+
+<h2>结果区</h2>
+
+<h3>TODO 2 · 全部任务(渲染到下面)</h3>
+<ol id="all"></ol>
+
+<h3>TODO 3 · 切换后(渲染到下面)</h3>
+<ol id="toggled"></ol>
+
+<h3>TODO 4 · 未完成数量</h3>
+<p>未完成:<strong id="left">?</strong> 项</p>
+
+<script type="module">
+const tasks = [
+  { id: 1, text: '给 AGV-04 重新规划路径', done: true  },
+  { id: 2, text: '排查 3 号充电桩离线',   done: false },
+  { id: 3, text: '导出昨日的任务报表',     done: false },
+];
+const robot = { name: 'AGV-04', position: { x: 12, y: 8 }, payload: null };
+
+// ✅ 示例(已写好):解构 + 空值合并
+const { name, payload } = robot;
+console.log(`示例:机器人 ${name},载荷 ${payload ?? '无'}`);
+
+// ────────────────────────────────────────────────
+// 【TODO 1 · 解构】一行完成:从 tasks 里解构出第一项,同时取出它的 id 和 text,
+//   变量名 id1、text1,console.log 出来
+//
+// const ??? = ???;
+
+
+// 【TODO 2 · map】把所有任务映射成 HTML 字符串数组并渲染到 #all
+//   每项格式:done 为 true 用 "✅ 文本",否则 "⬜ 文本",外面各包一对 li 标签
+//   提示:tasks.map(t => `…`);document.querySelector('#all').innerHTML = arr.join('')
+//
+
+
+// 【TODO 3 · 不可变更新】不改 tasks,生成「id 为 2 的任务切换 done」的新数组,
+//   同样渲染到 #toggled
+//   提示:tasks.map(t => t.id === 2 ? { ...t, done: !t.done } : t)
+//
+
+
+// 【TODO 4 · filter】生成未完成任务的新数组,数量渲染到 #left
+//
+
+
+// 【TODO 5 · 可选链 + 空值合并】安全读取以下两处,都不许抛错,console.log 出来:
+//   a) robot.position.z        (z 不存在 → 期望 undefined)
+//   b) robot.payload?.weight   (payload 为 null → 期望 undefined 而不是报错)
+//
+
+
+// 验收(最后解开注释,全绿即通过):
+// console.assert(document.querySelectorAll('#all li').length === 3, 'TODO 2 未完成');
+// console.assert(document.querySelectorAll('#toggled li').length === 3, 'TODO 3 未完成');
+// console.assert(document.getElementById('left').textContent === '2', 'TODO 4 未完成(切换后应有 2 项未完成)');
+</script>
+
+<p class="hint">完成后:截图控制台或把输出贴给老师。检查点不只是「跑通」,还有——TODO 3 里 <strong>tasks 本身变了吗</strong>?在控制台敲 <code>tasks</code> 看一眼再答。</p>
+
+</body>
+</html>
